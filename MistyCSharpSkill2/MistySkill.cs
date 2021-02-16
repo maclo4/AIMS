@@ -947,7 +947,7 @@ namespace MistyMapSkill2
 			await _misty.DriveAsync(15, 0);
 			do
 			{
-				closestTOFSensorReading();
+				 closestTOFSensorReading();
 
 			} while (closestObject > .75);
 			Debug.WriteLine("Pre path pose: " + pose.X + ":" + pose.Y);
