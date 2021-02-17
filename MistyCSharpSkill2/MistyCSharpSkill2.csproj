@@ -95,6 +95,8 @@
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="MoveCommand.cs" />
+    <Compile Include="MovementHistory.cs" />
     <Compile Include="StartupTask.cs" />
     <Compile Include="MistySkill.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

@@ -66,6 +66,11 @@ namespace MistyMapSkill2
 		private RobotPose initialPose = new RobotPose();
 
 		/// <summary>
+		/// This is used as a signal to prevent misty from receiving multiple "findPose()" commands at once from multiple events which may call "findPose()"
+		/// </summary>
+		///private DriveEncoderEvent 
+
+		/// <summary>
 		/// This is used as a signal to prevent misty from receiving movement commands when she is already moving from a hazard.
 		/// Set to true at the start of a hazard processing and false at the end of a hazard processing.
 		/// </summary>
@@ -414,6 +419,8 @@ namespace MistyMapSkill2
 		private void ProcessDriveEncoderEvent(object sender, IDriveEncoderEvent driveEncoderEvent)
 		{
 			driveEncoderData = driveEncoderEvent;
+
+			
 			
 		}
 
@@ -1185,7 +1192,7 @@ namespace MistyMapSkill2
 			while (!IMUEventReceived) { }
 			await _misty.DriveArcAsync(IMUData.Yaw - 180, .1, 7000, false);
 
-			_misty.PlayAudio("001-EeeeeeE.wav", 1, PlayAudioResponse);
+			_misty.PlayAudio("001-EeeeeeE.wav", 1, PlayAudioResponse); 
 			await Task.Delay(7000);
 			await _misty.DriveArcAsync(IMUData.Yaw - 180, .1, 7000, false);
 			_misty.PlayAudio("001-EeeeeeE.wav", 1, PlayAudioResponse);
