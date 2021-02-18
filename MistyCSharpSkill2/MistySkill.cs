@@ -19,6 +19,7 @@ using Windows.Storage.Streams;
 using Windows.Storage;
 using System.Timers;
 using System.Collections.ObjectModel;
+using MistyCSharpSkill2;
 
 namespace MistyMapSkill2
 {
@@ -68,7 +69,9 @@ namespace MistyMapSkill2
 		/// <summary>
 		/// This is used as a signal to prevent misty from receiving multiple "findPose()" commands at once from multiple events which may call "findPose()"
 		/// </summary>
-		///private DriveEncoderEvent 
+		private MovementHistory movementHistory;
+
+		private bool firstMove = true;
 
 		/// <summary>
 		/// This is used as a signal to prevent misty from receiving movement commands when she is already moving from a hazard.
@@ -224,6 +227,12 @@ namespace MistyMapSkill2
 			_misty.RegisterSlamStatusEvent(20, true, "Slam Status", null, null);
 			_misty.SlamStatusEventReceived += ProcessSlamStatusEvent;
 
+			_misty.RegisterLocomotionCommandEvent(100, true, null, "Movement Command Event", null);
+			_misty.LocomotionCommandEventReceived += ProcessLocomotionCommandEvent;
+
+			_misty.RegisterHaltCommandEvent(100, true, "Halt Command Event", null);
+            _misty.HaltCommandEventReceived += ProcessHaltCommandEventReceived;
+
 			// Check description (All functions should have descriptions if you hover over them)
 			registerTOFEvents();
 
@@ -275,6 +284,7 @@ namespace MistyMapSkill2
 
 			await _misty.StartTrackingAsync();
 		
+			
 			while (true)
 				{
 				IGetSlamStatusResponse slamStatus = await _misty.GetSlamStatusAsync();
@@ -298,9 +308,17 @@ namespace MistyMapSkill2
 
 					*/
 
+
 			//	_misty.RegisterObstacleMapEvent(300, true, "Obstacle Event", null);
 			//_misty.ObstacleMapEventReceived += ProcessObstacleMapEvent;
+		
+			Debug.WriteLine("Start moving now");
+			await Task.Delay(60000);
+			Debug.WriteLine("Stop moving");
+			await Task.Delay(5000);
+			movementHistory.RetraceSteps(_misty);
 
+			while (true) { }
 			// =============================================================================================================
 			// \/ Real code begins again here \/ 
 			// =============================================================================================================
@@ -364,12 +382,43 @@ namespace MistyMapSkill2
 
 		}
 
+        private void ProcessHaltCommandEventReceived(object sender, IHaltCommandEvent haltCommandEvent)
+        {
+			Debug.WriteLine("Processing halt command (good if this shows up)");
+			if (firstMove == true)
+			{
+				movementHistory = new MovementHistory(haltCommandEvent.Created);
+				firstMove = false;
+			}
+			else
+			{
+				movementHistory.Enqueue(0, 0, haltCommandEvent.Created);
+			}
+		}
+	
+
+        private void ProcessLocomotionCommandEvent(object sender, ILocomotionCommandEvent locomotionCommandEvent)
+		{
+			//driveEncoderData = driveEncoderEvent;
 
 
-		/// <summary>
-		/// Simply update the pose variable to make it current.
-		/// </summary>
-		private void ProcessSelfStateEvent(object sender, ISelfStateEvent selfStateEvent)
+			if (firstMove == true)
+			{
+				movementHistory = new MovementHistory(locomotionCommandEvent.Created);
+				firstMove = false;
+			}
+			else
+			{
+				movementHistory.Enqueue(locomotionCommandEvent.AngularVelocity, locomotionCommandEvent.LinearVelocity, locomotionCommandEvent.Created);
+			}
+		}
+
+
+
+        /// <summary>
+        /// Simply update the pose variable to make it current.
+        /// </summary>
+        private void ProcessSelfStateEvent(object sender, ISelfStateEvent selfStateEvent)
 		{
 			pose = selfStateEvent.Pose;
 			//pose.;
@@ -419,9 +468,17 @@ namespace MistyMapSkill2
 		private void ProcessDriveEncoderEvent(object sender, IDriveEncoderEvent driveEncoderEvent)
 		{
 			driveEncoderData = driveEncoderEvent;
-
-			
-			
+			/*
+			if (firstMove == true)
+			{
+				movementHistory = new MovementHistory(driveEncoderEvent);
+				firstMove = false;
+			}
+			else
+			{
+				movementHistory.Enqueue(driveEncoderEvent);
+			}
+			*/
 		}
 
 		/// <summary>
