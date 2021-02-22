@@ -306,7 +306,7 @@ namespace MistyMapSkill2
 				await Task.Delay(100);
             }
 
-					*/
+				
 
 
 			//	_misty.RegisterObstacleMapEvent(300, true, "Obstacle Event", null);
@@ -322,7 +322,7 @@ namespace MistyMapSkill2
 			// =============================================================================================================
 			// \/ Real code begins again here \/ 
 			// =============================================================================================================
-
+				*/
 
 			// keep attempting to initialize the slam mapping until misty has a pose (and is exploring and streaming, but those are usually not the problem
 			do
@@ -354,10 +354,16 @@ namespace MistyMapSkill2
 
 				// not sure if I should be turning on tracking or not
 				//await _misty.StartTrackingAsync();
-				dumbRoaming();
-
+				for (int i = 0; i < 5; i++)
+				{
+					_misty.DriveArc(IMUData.Yaw - 20, 0, 2000, false, null);
+					dumbRoaming();
+				}
+				
+				/*
 				await _misty.StartTrackingAsync();
 				await semiSmartRoam();
+				*/
                 
 				// I think this is unneccesary now
 				int width = map.Width;
@@ -926,7 +932,9 @@ namespace MistyMapSkill2
 		/// </summary>
 		private async Task initializeMapping()
 		{
+			if (hasPose && isExploring && isStreaming) return;
 
+			Debug.WriteLine("TURNING OFF AND ON MAPPING");
 			await _misty.StopMappingAsync();
 			await _misty.StopSlamStreamingAsync();
 
@@ -1076,7 +1084,7 @@ namespace MistyMapSkill2
 			
 			timer.Elapsed += new ElapsedEventHandler(OnTimedEvent);
 			timer.Start();
-			while (elapsedSeconds < 120) // !isMapMostlyFilled(map) && 
+			while (elapsedSeconds < 20) // !isMapMostlyFilled(map) && 
 			{
 				closestTOFSensorReading();
 				if (!isMovingFromHazard && closestObject > .75 && robotState != RobotState.DriveStraight)
@@ -1135,6 +1143,7 @@ namespace MistyMapSkill2
                 }
 				
 			}
+			movementHistory.RetraceSteps(_misty);
 			elapsedSeconds = 0;
 		}
 

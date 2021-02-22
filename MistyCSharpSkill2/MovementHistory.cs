@@ -69,31 +69,31 @@ namespace MistyCSharpSkill2
 			return movement;
 		} 
 
-		public void RetraceSteps(IRobotMessenger _misty)
+		public void RetraceSteps(IRobotMessenger _misty, int stepsToRetrace = -1)
         {
 			currentTime = DateTimeOffset.Now;
 
 			retracingSteps = true;
-
-			int size = inputBuffer.Count;
-			Debug.WriteLine("size: " + size);
-			for (int i = 0; i < size; i++)
+			if(stepsToRetrace >= inputBuffer.Count || stepsToRetrace == -1)
             {
-                //Debug.WriteLine("Retracing: " + inputBuffer.ElementAt(i).driveEncoderData.LeftVelocity + " , ms: " + inputBuffer.ElementAt(i).millisecondsToDriveFor);
-                MoveCommand moveCommand = Pop();
+				stepsToRetrace = inputBuffer.Count - 1;
+            }
+			//int size = inputBuffer.Count;
+			Debug.WriteLine("size: " + size);
+			for (int i = 0; i < stepsToRetrace; i++)
+            {
+                
+				MoveCommand moveCommand = Pop();
 
 				TimeSpan millisecondsToDriveFor = currentTime.Subtract(moveCommand.created);
 				currentTime = moveCommand.created;
 
 
 				Debug.WriteLine("Retracing: " + moveCommand.linearVelocity + "angular velocity: " + moveCommand.angularVelocity + " , ms: " + millisecondsToDriveFor.TotalMilliseconds);
-				//if (moveCommand.locomotionCommandEvent.LinearVelocity != 0 || moveCommand.locomotionCommandEvent.AngularVelocity != 0)
-				//{
-					//_misty.DriveTrack(moveCommand.locomotionCommandEvent.LeftVelocity * -1, moveCommand.locomotionCommandEvent.RightVelocity * -1, DriveTrackResponse);
-
+				
 					_misty.Drive(moveCommand.linearVelocity * -100, moveCommand.angularVelocity * -1, DriveTrackResponse);
 					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds);
-				//}
+				
 
             }
 
