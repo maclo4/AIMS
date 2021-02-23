@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-
+using MistyRobotics.Common.Data;
 using MistyRobotics.SDK.Events;
 using MistyRobotics.SDK.Messengers;
 using MistyRobotics.SDK.Responses;
@@ -71,34 +71,44 @@ namespace MistyCSharpSkill2
 
 		public void RetraceSteps(IRobotMessenger _misty, int stepsToRetrace = -1)
         {
+			HazardSettings hazardSettings = new HazardSettings();
+			hazardSettings.DisableTimeOfFlights = true;
+			_misty.UpdateHazardSettings(hazardSettings, null);
+
 			currentTime = DateTimeOffset.Now;
 
 			retracingSteps = true;
 			if(stepsToRetrace >= inputBuffer.Count || stepsToRetrace == -1)
             {
-				stepsToRetrace = inputBuffer.Count - 1;
+				stepsToRetrace = inputBuffer.Count;
             }
 			//int size = inputBuffer.Count;
 			Debug.WriteLine("size: " + size);
 			for (int i = 0; i < stepsToRetrace; i++)
             {
-                
-				MoveCommand moveCommand = Pop();
+
+                MoveCommand moveCommand = Pop();
 
 				TimeSpan millisecondsToDriveFor = currentTime.Subtract(moveCommand.created);
 				currentTime = moveCommand.created;
 
 
-				Debug.WriteLine("Retracing: " + moveCommand.linearVelocity + "angular velocity: " + moveCommand.angularVelocity + " , ms: " + millisecondsToDriveFor.TotalMilliseconds);
+				Debug.WriteLine("MoveCommand[" + i + "] Linear Velocity: " + moveCommand.linearVelocity + "angular velocity: " + moveCommand.angularVelocity + " , ms: " + millisecondsToDriveFor.TotalMilliseconds);
 				
-					_misty.Drive(moveCommand.linearVelocity * -100, moveCommand.angularVelocity * -1, DriveTrackResponse);
-					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds);
+				_misty.DriveTime(moveCommand.linearVelocity * -100, moveCommand.angularVelocity * -1, (int)millisecondsToDriveFor.TotalMilliseconds, DriveTrackResponse);
+				Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds ); // + 500
 				
 
             }
 
+			
+
+			hazardSettings.DisableTimeOfFlights = false;
+			hazardSettings.RevertToDefault = true;
+			_misty.UpdateHazardSettings(hazardSettings, null);
+
 			retracingSteps = false;
-        }
+		}
 
         private void DriveTrackResponse(IRobotCommandResponse commandResponse)
         {

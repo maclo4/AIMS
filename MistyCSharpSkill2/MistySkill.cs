@@ -167,7 +167,12 @@ namespace MistyMapSkill2
 		/// Current distance reading of the frontCenter time of flight sensor
 		/// </summary>
 		private double frontCenterTOF = 0;
-		
+
+		/// <summary>
+		/// Amount of move commands given in this sequence of roaming
+		/// </summary>
+		int stepsToRetrace = 0;
+
 		/// <summary>
 		/// Skill details for the robot
 		/// 
@@ -313,16 +318,33 @@ namespace MistyMapSkill2
 			//_misty.ObstacleMapEventReceived += ProcessObstacleMapEvent;
 		
 			Debug.WriteLine("Start moving now");
-			await Task.Delay(60000);
+			await Task.Delay(20000);
 			Debug.WriteLine("Stop moving");
+
+			HazardSettings hazardSettings = new HazardSettings();
+			hazardSettings.DisableTimeOfFlights = true;
+			_misty.UpdateHazardSettings(hazardSettings, null);
 			await Task.Delay(5000);
 			movementHistory.RetraceSteps(_misty);
+
+			Debug.WriteLine("Retracing complete");
+			hazardSettings.DisableTimeOfFlights = false;
+			hazardSettings.RevertToDefault = true;
+			_misty.UpdateHazardSettings(hazardSettings, null);
+			*/
+			await Task.Delay(5000);
+
+			for (int i = 0; i < 5; i++)
+			{
+				_misty.DriveArc(IMUData.Yaw - 20, 0, 2000, false, null);
+				dumbRoaming();
+			}
 
 			while (true) { }
 			// =============================================================================================================
 			// \/ Real code begins again here \/ 
 			// =============================================================================================================
-				*/
+				
 
 			// keep attempting to initialize the slam mapping until misty has a pose (and is exploring and streaming, but those are usually not the problem
 			do
@@ -390,33 +412,32 @@ namespace MistyMapSkill2
 
         private void ProcessHaltCommandEventReceived(object sender, IHaltCommandEvent haltCommandEvent)
         {
+			stepsToRetrace++;
 			Debug.WriteLine("Processing halt command (good if this shows up)");
 			if (firstMove == true)
 			{
 				movementHistory = new MovementHistory(haltCommandEvent.Created);
 				firstMove = false;
 			}
-			else
-			{
-				movementHistory.Enqueue(0, 0, haltCommandEvent.Created);
-			}
+
+			movementHistory.Enqueue(0, 0, haltCommandEvent.Created);
+		
 		}
 	
 
         private void ProcessLocomotionCommandEvent(object sender, ILocomotionCommandEvent locomotionCommandEvent)
 		{
 			//driveEncoderData = driveEncoderEvent;
-
+			stepsToRetrace++;
 
 			if (firstMove == true)
 			{
 				movementHistory = new MovementHistory(locomotionCommandEvent.Created);
 				firstMove = false;
 			}
-			else
-			{
-				movementHistory.Enqueue(locomotionCommandEvent.AngularVelocity, locomotionCommandEvent.LinearVelocity, locomotionCommandEvent.Created);
-			}
+			
+			movementHistory.Enqueue(locomotionCommandEvent.AngularVelocity, locomotionCommandEvent.LinearVelocity, locomotionCommandEvent.Created);
+		
 		}
 
 
@@ -1076,6 +1097,8 @@ namespace MistyMapSkill2
 		/// </summary>
 		private void dumbRoaming()
 		{
+			stepsToRetrace = 0;
+
 			var random = new Random();
 			
 			//double angularVelocity = 20 * random.NextDouble();
@@ -1102,8 +1125,10 @@ namespace MistyMapSkill2
 				else if (!isMovingFromHazard && closestObject < .75)
 				{
 					Debug.WriteLine("find open direction (dumb roam)");
+					_misty.Drive(0, 0, null);
+					System.Threading.Thread.Sleep(500);
 					//_misty.Stop(null);
-					spinTillOpenArea(1);
+					spinTillOpenArea(1.25);
 					//roamStates = DumbRoamStates.Drive360;
 					robotState = RobotState.Spinning;
 					
@@ -1143,7 +1168,7 @@ namespace MistyMapSkill2
                 }
 				
 			}
-			movementHistory.RetraceSteps(_misty);
+			movementHistory.RetraceSteps(_misty, stepsToRetrace);
 			elapsedSeconds = 0;
 		}
 
