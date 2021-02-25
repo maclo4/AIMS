@@ -96,9 +96,9 @@ namespace MistyCSharpSkill2
 				TimeSpan millisecondsToDriveFor = currentTime.Subtract(moveCommand.Created);
 				currentTime = moveCommand.Created;
 
-				if (moveCommand.Command == "Drive" || moveCommand.Command == "DriveTime" || moveCommand.Command == "DriveAsync" || moveCommand.Command == "DriveTimeAsync") {
+				if (moveCommand.Command == "Drive" || moveCommand.Command == "DriveAsync") {
 					
-
+					
 					
 					var linearVelocityString = moveCommand.Parameters["LinearVelocity"];
 					var angularVelocityString = moveCommand.Parameters["AngularVelocity"];
@@ -110,9 +110,28 @@ namespace MistyCSharpSkill2
 
 					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500);
 				}
-				else if(moveCommand.Command == "Stop")
+				else if(moveCommand.Command == "DriveTime" || moveCommand.Command == "DriveTimeAsync") 
+				{
+					var linearVelocity = Convert.ToDouble(moveCommand.Parameters["LinearVelocity"]);
+					var angularVelocity = Convert.ToDouble(moveCommand.Parameters["AngularVelocity"]);
+					var timeMs = (int)Convert.ToInt64(moveCommand.Parameters["TimeMs"]);
+					_misty.DriveTime(linearVelocity, angularVelocity, timeMs, DriveTrackResponse);
+					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500);
+				}
+				else if(moveCommand.Command == "Stop" || moveCommand.Command == "StopAsync")
                 {
 					_misty.DriveTime(0, 0, (int)millisecondsToDriveFor.TotalMilliseconds, DriveTrackResponse);
+					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500);
+				}
+				else if(moveCommand.Command == "DriveArc" || moveCommand.Command == "DriveArcAsync")
+                {
+					
+					var heading = Convert.ToDouble(moveCommand.Parameters["Heading"]);
+					var radius = Convert.ToDouble(moveCommand.Parameters["Radius"]);
+					var timeMs = (int)Convert.ToInt64(moveCommand.Parameters["TimeMs"]);
+					var reverse = Convert.ToBoolean(moveCommand.Parameters["Reverse"]);
+					_misty.DriveArc(heading, radius, timeMs, reverse, DriveTrackResponse);
+
 					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500);
 				}
 

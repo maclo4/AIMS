@@ -173,6 +173,9 @@ namespace MistyMapSkill2
 		/// </summary>
 		int stepsToRetrace = 0;
 
+		System.Timers.Timer dumbRoamTimer = new Timer(1000);
+		
+
 		/// <summary>
 		/// Skill details for the robot
 		/// 
@@ -205,7 +208,9 @@ namespace MistyMapSkill2
 		/// <param name="parameters"></param>
 		public async void OnStart(object sender, IDictionary<string, object> parameters)
 		{
-			
+			dumbRoamTimer.Elapsed += new ElapsedEventHandler(OnTimedEvent);
+			dumbRoamTimer.Start();
+		
 
 			// simply change color to show that the skill has begun
 			_misty.ChangeLED(0, 200, 0, LEDResponse);
@@ -320,45 +325,42 @@ namespace MistyMapSkill2
 			//	_misty.RegisterObstacleMapEvent(300, true, "Obstacle Event", null);
 			//_misty.ObstacleMapEventReceived += ProcessObstacleMapEvent;
 		
+		
+
 			await Task.Delay(2500);
 
 			
-			_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, null);
-			await Task.Delay(2500);
+			_misty.DriveArc(IMUData.Yaw - 90, 0, 2500, false, null);
+			await Task.Delay(3000);
 
 			_misty.DriveArc(IMUData.Yaw, 0, 0, false, null); // ??
 
-			await Task.Delay(2500);
+			await Task.Delay(3000);
 
-			_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, null);
-			await Task.Delay(2500);
+			_misty.DriveArc(IMUData.Yaw - 90, 0, 2500, false, null);
+			await Task.Delay(3000);
 
 			_misty.Drive(0, 0, null); // ??
-			*/
+			
+	
 			Debug.WriteLine("Start moving now");
 			await Task.Delay(20000);
 			Debug.WriteLine("Stop moving");
 
-			HazardSettings hazardSettings = new HazardSettings();
-			hazardSettings.DisableTimeOfFlights = true;
-			_misty.UpdateHazardSettings(hazardSettings, null);
 			await Task.Delay(5000);
 			movementHistory.RetraceSteps(_misty);
 
-			Debug.WriteLine("Retracing complete");
-			hazardSettings.DisableTimeOfFlights = false;
-			hazardSettings.RevertToDefault = true;
-			_misty.UpdateHazardSettings(hazardSettings, null);
 			
-			/*
+			*/
+			
 			await Task.Delay(5000);
 
-			for (int i = 0; i < 5; i++)
-			{
-				_misty.DriveArc(IMUData.Yaw - 20, 0, 2000, false, null);
+			//for (int i = 0; i < 5; i++)
+			//{
+				//_misty.DriveArc(IMUData.Yaw - 20, 0, 2000, false, null);
 				dumbRoaming();
-			}
-			*/
+			//}
+			Debug.WriteLine("Retracing complete");
 			while (true) { }
 			// =============================================================================================================
 			// \/ Real code begins again here \/ 
@@ -431,16 +433,16 @@ namespace MistyMapSkill2
 
         private void ProcessRobotCommandEvent(object sender, IRobotCommandEvent commandEvent)
         {
-			Debug.WriteLine("Robot Command Event: " + commandEvent.Command);
-			RobotCommand robotCommand;
-			DriveArcCommand driveArcCommand;
-			if(commandEvent.Command == "DriveArc" || commandEvent.Command == "Drive" || commandEvent.Command == "DriveTime" || 
-				commandEvent.Command == "DriveArcAsync" || commandEvent.Command == "DriveAsync" || commandEvent.Command == "DriveTimeAsync" ||
+			
+			
+			
+			if( commandEvent.Command == "Drive" || commandEvent.Command == "DriveTime" || 
+				commandEvent.Command == "DriveAsync" || commandEvent.Command == "DriveTimeAsync" ||
 				commandEvent.Command == "DriveHeading" || commandEvent.Command == "DriveHeadingAsync" ||
 				commandEvent.Command == "DriveTrack" || commandEvent.Command == "DriveTrackAsync" || commandEvent.Command == "Stop")
             {
-		
-				Debug.WriteLine("Inside the if statement");
+				stepsToRetrace++;
+				Debug.WriteLine("Robot Command Event: " + commandEvent.Command);
 				if (firstMove == true)
 				{
 					movementHistory = new MovementHistory(commandEvent.Created);
@@ -459,9 +461,22 @@ namespace MistyMapSkill2
 
 				movementHistory.Enqueue(commandEvent);
 			}
-		//_misty.Execute()
-		
-        }
+			else if(commandEvent.Command == "DriveArc" || commandEvent.Command == "DriveArcAsync")
+            {
+				Debug.WriteLine("Robot Command Event: " + commandEvent.Command);
+				stepsToRetrace++;
+				if (firstMove == true)
+				{
+					movementHistory = new MovementHistory(commandEvent.Created);
+					firstMove = false;
+				}
+				IRobotCommandEvent driveArcCommand = commandEvent;
+				driveArcCommand.Parameters["Heading"] = IMUData.Yaw; 
+				movementHistory.Enqueue(driveArcCommand);
+			}
+			//_misty.Execute()
+
+		}
 
         private void ProcessHaltCommandEventReceived(object sender, IHaltCommandEvent haltCommandEvent)
         {
@@ -1164,15 +1179,14 @@ namespace MistyMapSkill2
 		private void dumbRoaming()
 		{
 			stepsToRetrace = 0;
-
+			elapsedSeconds = 0;
 			var random = new Random();
 			
 			//double angularVelocity = 20 * random.NextDouble();
 			Debug.WriteLine("Dumb Roaming started");
-			System.Timers.Timer timer = new Timer(1000);
 			
-			timer.Elapsed += new ElapsedEventHandler(OnTimedEvent);
-			timer.Start();
+			
+			
 			while (elapsedSeconds < 20) // !isMapMostlyFilled(map) && 
 			{
 				closestTOFSensorReading();
@@ -1234,7 +1248,12 @@ namespace MistyMapSkill2
                 }
 				
 			}
-			movementHistory.RetraceSteps(_misty, stepsToRetrace);
+
+			_misty.Drive(0, 0, null);
+			System.Threading.Thread.Sleep(2000);
+			Debug.WriteLine("Code has moved past retrace steps, stepsToRetrace = " + stepsToRetrace);
+			movementHistory.RetraceSteps(_misty, stepsToRetrace + 1);
+			
 			elapsedSeconds = 0;
 		}
 
