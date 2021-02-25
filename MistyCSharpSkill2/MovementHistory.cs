@@ -96,7 +96,7 @@ namespace MistyCSharpSkill2
 				Debug.WriteLine("MoveCommand[" + i + "] Linear Velocity: " + moveCommand.linearVelocity + "angular velocity: " + moveCommand.angularVelocity + " , ms: " + millisecondsToDriveFor.TotalMilliseconds);
 				
 				_misty.DriveTime(moveCommand.linearVelocity * -100, moveCommand.angularVelocity * -1, (int)millisecondsToDriveFor.TotalMilliseconds, DriveTrackResponse);
-				Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds ); // + 500
+				Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500); 
 				
 
             }

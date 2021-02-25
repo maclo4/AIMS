@@ -238,6 +238,9 @@ namespace MistyMapSkill2
 			_misty.RegisterHaltCommandEvent(100, true, "Halt Command Event", null);
             _misty.HaltCommandEventReceived += ProcessHaltCommandEventReceived;
 
+			_misty.RegisterRobotCommandEvent(100, true, "Robot Command Event", null);
+			_misty.RobotCommandEventReceived += ProcessRobotCommandEvent;
+
 			// Check description (All functions should have descriptions if you hover over them)
 			registerTOFEvents();
 
@@ -316,8 +319,22 @@ namespace MistyMapSkill2
 
 			//	_misty.RegisterObstacleMapEvent(300, true, "Obstacle Event", null);
 			//_misty.ObstacleMapEventReceived += ProcessObstacleMapEvent;
-		
+		*/
+			await Task.Delay(2500);
+
 			Debug.WriteLine("Start moving now");
+			_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, null);
+			await Task.Delay(2500);
+
+			_misty.DriveArc(IMUData.Yaw, 0, 0, false, null); // ??
+
+			await Task.Delay(2500);
+
+			_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, null);
+			await Task.Delay(2500);
+
+			_misty.Drive(0, 0, null); // ??
+
 			await Task.Delay(20000);
 			Debug.WriteLine("Stop moving");
 
@@ -331,7 +348,8 @@ namespace MistyMapSkill2
 			hazardSettings.DisableTimeOfFlights = false;
 			hazardSettings.RevertToDefault = true;
 			_misty.UpdateHazardSettings(hazardSettings, null);
-			*/
+			
+			/*
 			await Task.Delay(5000);
 
 			for (int i = 0; i < 5; i++)
@@ -339,7 +357,7 @@ namespace MistyMapSkill2
 				_misty.DriveArc(IMUData.Yaw - 20, 0, 2000, false, null);
 				dumbRoaming();
 			}
-
+			*/
 			while (true) { }
 			// =============================================================================================================
 			// \/ Real code begins again here \/ 
@@ -410,6 +428,40 @@ namespace MistyMapSkill2
 
 		}
 
+        private void ProcessRobotCommandEvent(object sender, IRobotCommandEvent commandEvent)
+        {
+			Debug.WriteLine("Robot Command Event: " + commandEvent.Command);
+			RobotCommand robotCommand;
+			DriveArcCommand driveArcCommand;
+			if(commandEvent.Command == "DriveArc" || commandEvent.Command == "Drive" || commandEvent.Command == "DriveTime" || 
+				commandEvent.Command == "DriveArcAsync" || commandEvent.Command == "DriveAsync" || commandEvent.Command == "DriveTimeAsync" ||
+				commandEvent.Command == "DriveHeading" || commandEvent.Command == "DriveHeadingAsync" ||
+				commandEvent.Command == "DriveTrack" || commandEvent.Command == "DriveTrackAsync")
+            {
+		
+				Debug.WriteLine("Inside the if statement");
+				if (firstMove == true)
+				{
+					movementHistory = new MovementHistory(commandEvent.Created);
+					firstMove = false;
+				}
+
+				/*
+				ICollection<String> Keys = commandEvent.Parameters.Keys;
+				ICollection<object> parameters = commandEvent.Parameters.Values;
+				foreach (KeyValuePair<string, object> kvp in commandEvent.Parameters)
+				{
+					//textBox3.Text += ("Key = {0}, Value = {1}", kvp.Key, kvp.Value);
+					Debug.WriteLine("Key = {0}, Value = {1}", kvp.Key, kvp.Value);
+				}
+				*/
+
+				movementHistory.Enqueue(commandEvent);
+			}
+		//_misty.Execute()
+		
+        }
+
         private void ProcessHaltCommandEventReceived(object sender, IHaltCommandEvent haltCommandEvent)
         {
 			stepsToRetrace++;
@@ -427,9 +479,10 @@ namespace MistyMapSkill2
 
         private void ProcessLocomotionCommandEvent(object sender, ILocomotionCommandEvent locomotionCommandEvent)
 		{
+			Debug.WriteLine("Processing locomotion event: " + sender.GetType());
 			//driveEncoderData = driveEncoderEvent;
 			stepsToRetrace++;
-
+			
 			if (firstMove == true)
 			{
 				movementHistory = new MovementHistory(locomotionCommandEvent.Created);
@@ -548,7 +601,9 @@ namespace MistyMapSkill2
 				{
 					_misty.DriveArc(IMUData.Yaw - 35, 0, 2500, false, DriveArcResponse);
 					System.Threading.Thread.Sleep(2500);
-					//await Task.Delay(2500);
+					_misty.Drive(0, 0, null); // ??
+					System.Threading.Thread.Sleep(500);
+					//await Task.Delay(500);
 					Debug.WriteLine("Hazard processing: front and back");
 				}
 				// can't drive forward, so back up and turn away
@@ -558,9 +613,13 @@ namespace MistyMapSkill2
 					_misty.DriveTime(-10, 0, 4000, null);
 					
 					System.Threading.Thread.Sleep(4000);
+					_misty.Drive(0, 0, null); // ??
+					System.Threading.Thread.Sleep(500);
 					//await Task.Delay(4000);
 					_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, null);
 					System.Threading.Thread.Sleep(2500);
+					_misty.Drive(0, 0, null); // ??
+					System.Threading.Thread.Sleep(500);
 					//await Task.Delay(2500);
 					Debug.WriteLine("2.5 seconds later: turning 25 degrees");
 
@@ -583,12 +642,16 @@ namespace MistyMapSkill2
 					_misty.DriveTime(10, 0, 4000, null);
 					//_misty.PlayAudio("001-EeeeeeE.wav", 1, PlayAudioResponse);
 					System.Threading.Thread.Sleep(4000);
+					_misty.Drive(0, 0, null); // ??
+					System.Threading.Thread.Sleep(500);
 					//await Task.Delay(4000);
 					Debug.WriteLine("4 seconds later: turning 25 degrees");
 					_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, null);
 					System.Threading.Thread.Sleep(2500);
+					_misty.Drive(0, 0, null); // ??
+					System.Threading.Thread.Sleep(500);
 					//await Task.Delay(2500);
-					
+
 					//await spinTillOpenArea(1.25);
 				}
 				else
@@ -1204,7 +1267,7 @@ namespace MistyMapSkill2
 			{
 				// Create an encoder with the desired format
 				BitmapEncoder encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream);
-
+				
 				// Set the software bitmap
 				encoder.SetSoftwareBitmap(softwareBitmap);
 				// Set additional encoding parameters, if needed
