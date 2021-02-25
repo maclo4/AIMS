@@ -16,7 +16,7 @@ namespace MistyCSharpSkill2
 	{
 
 		// input buffer variable to store 10 most recent inputs
-		List<MoveCommand> inputBuffer;
+		List<IRobotCommandEvent> moveQueue;
 		Stopwatch stopwatch;
 		DateTimeOffset previousTime, currentTime;
 		bool retracingSteps = false;
@@ -26,7 +26,7 @@ namespace MistyCSharpSkill2
 		// constructor (kinda pointless)
 		public MovementHistory(DateTimeOffset firstEvent)
 		{
-			inputBuffer = new List<MoveCommand>();
+			moveQueue = new List<IRobotCommandEvent>();
 			stopwatch = new Stopwatch();
 			stopwatch.Start();
 			size = 10000;
@@ -36,9 +36,13 @@ namespace MistyCSharpSkill2
 
 
 		// add an input to the end of the list
-		public void Enqueue(double _angularVelocity, double _linearVelocity, DateTimeOffset _created)
+		public void Enqueue(IRobotCommandEvent moveCommand)
 		{
-			if (retracingSteps == true) return;
+			if (retracingSteps == true)
+			{
+				Debug.WriteLine("Command rejected bc of retracing steps being active");
+				return;
+			}
 
 			//IDriveEncoderEvent inputTime = new IDriveEncoderEvent(input, stopwatch.ElapsedMilliseconds);
 			//previousTime = currentTime;
@@ -53,19 +57,19 @@ namespace MistyCSharpSkill2
 			*/
 
 
-			MoveCommand moveCommand = new MoveCommand(_angularVelocity, _linearVelocity, _created);
-			inputBuffer.Add(moveCommand);
+			//MoveCommand moveCommand = new MoveCommand(_angularVelocity, _linearVelocity, _created);
+			moveQueue.Add(moveCommand);
 
-			while (inputBuffer.Count > size)
+			while (moveQueue.Count > size)
 			{
 
-				inputBuffer.RemoveAt(0);
+				moveQueue.RemoveAt(0);
 			}
 		}
-		public MoveCommand Pop()
+		public IRobotCommandEvent Pop()
 		{
-			var movement = inputBuffer.ElementAt(inputBuffer.Count - 1);
-			inputBuffer.RemoveAt(inputBuffer.Count - 1);
+			var movement = moveQueue.ElementAt(moveQueue.Count - 1);
+			moveQueue.RemoveAt(moveQueue.Count - 1);
 			return movement;
 		} 
 
@@ -78,26 +82,39 @@ namespace MistyCSharpSkill2
 			currentTime = DateTimeOffset.Now;
 
 			retracingSteps = true;
-			if(stepsToRetrace >= inputBuffer.Count || stepsToRetrace == -1)
+			if(stepsToRetrace >= moveQueue.Count || stepsToRetrace == -1)
             {
-				stepsToRetrace = inputBuffer.Count;
+				stepsToRetrace = moveQueue.Count;
             }
 			//int size = inputBuffer.Count;
 			Debug.WriteLine("size: " + size);
 			for (int i = 0; i < stepsToRetrace; i++)
             {
 
-                MoveCommand moveCommand = Pop();
+                IRobotCommandEvent moveCommand = Pop();
 
-				TimeSpan millisecondsToDriveFor = currentTime.Subtract(moveCommand.created);
-				currentTime = moveCommand.created;
+				TimeSpan millisecondsToDriveFor = currentTime.Subtract(moveCommand.Created);
+				currentTime = moveCommand.Created;
 
+				if (moveCommand.Command == "Drive" || moveCommand.Command == "DriveTime" || moveCommand.Command == "DriveAsync" || moveCommand.Command == "DriveTimeAsync") {
+					
 
-				Debug.WriteLine("MoveCommand[" + i + "] Linear Velocity: " + moveCommand.linearVelocity + "angular velocity: " + moveCommand.angularVelocity + " , ms: " + millisecondsToDriveFor.TotalMilliseconds);
-				
-				_misty.DriveTime(moveCommand.linearVelocity * -100, moveCommand.angularVelocity * -1, (int)millisecondsToDriveFor.TotalMilliseconds, DriveTrackResponse);
-				Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500); 
-				
+					
+					var linearVelocityString = moveCommand.Parameters["LinearVelocity"];
+					var angularVelocityString = moveCommand.Parameters["AngularVelocity"];
+					double linearVelocity = Convert.ToDouble(linearVelocityString);
+					double angularVelocity = Convert.ToDouble(angularVelocityString);
+
+					Debug.WriteLine("MoveCommand[" + i + "] Linear Velocity: " + (double)linearVelocity * -1 + ", Angular Velocity: " + (double)angularVelocity * -1 + " , ms: " + (int)millisecondsToDriveFor.TotalMilliseconds);
+					_misty.DriveTime(linearVelocity * -1, angularVelocity * -1, (int)millisecondsToDriveFor.TotalMilliseconds, DriveTrackResponse);
+
+					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500);
+				}
+				else if(moveCommand.Command == "Stop")
+                {
+					_misty.DriveTime(0, 0, (int)millisecondsToDriveFor.TotalMilliseconds, DriveTrackResponse);
+					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500);
+				}
 
             }
 

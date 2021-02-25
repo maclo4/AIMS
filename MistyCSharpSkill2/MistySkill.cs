@@ -319,10 +319,10 @@ namespace MistyMapSkill2
 
 			//	_misty.RegisterObstacleMapEvent(300, true, "Obstacle Event", null);
 			//_misty.ObstacleMapEventReceived += ProcessObstacleMapEvent;
-		*/
+		
 			await Task.Delay(2500);
 
-			Debug.WriteLine("Start moving now");
+			
 			_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, null);
 			await Task.Delay(2500);
 
@@ -334,7 +334,8 @@ namespace MistyMapSkill2
 			await Task.Delay(2500);
 
 			_misty.Drive(0, 0, null); // ??
-
+			*/
+			Debug.WriteLine("Start moving now");
 			await Task.Delay(20000);
 			Debug.WriteLine("Stop moving");
 
@@ -436,7 +437,7 @@ namespace MistyMapSkill2
 			if(commandEvent.Command == "DriveArc" || commandEvent.Command == "Drive" || commandEvent.Command == "DriveTime" || 
 				commandEvent.Command == "DriveArcAsync" || commandEvent.Command == "DriveAsync" || commandEvent.Command == "DriveTimeAsync" ||
 				commandEvent.Command == "DriveHeading" || commandEvent.Command == "DriveHeadingAsync" ||
-				commandEvent.Command == "DriveTrack" || commandEvent.Command == "DriveTrackAsync")
+				commandEvent.Command == "DriveTrack" || commandEvent.Command == "DriveTrackAsync" || commandEvent.Command == "Stop")
             {
 		
 				Debug.WriteLine("Inside the if statement");
@@ -446,15 +447,15 @@ namespace MistyMapSkill2
 					firstMove = false;
 				}
 
-				/*
+				
 				ICollection<String> Keys = commandEvent.Parameters.Keys;
 				ICollection<object> parameters = commandEvent.Parameters.Values;
 				foreach (KeyValuePair<string, object> kvp in commandEvent.Parameters)
 				{
 					//textBox3.Text += ("Key = {0}, Value = {1}", kvp.Key, kvp.Value);
-					Debug.WriteLine("Key = {0}, Value = {1}", kvp.Key, kvp.Value);
+					//Debug.WriteLine("Key = {0}, Value = {1}", kvp.Key, kvp.Value);
 				}
-				*/
+				
 
 				movementHistory.Enqueue(commandEvent);
 			}
@@ -464,6 +465,7 @@ namespace MistyMapSkill2
 
         private void ProcessHaltCommandEventReceived(object sender, IHaltCommandEvent haltCommandEvent)
         {
+			/*
 			stepsToRetrace++;
 			Debug.WriteLine("Processing halt command (good if this shows up)");
 			if (firstMove == true)
@@ -473,12 +475,13 @@ namespace MistyMapSkill2
 			}
 
 			movementHistory.Enqueue(0, 0, haltCommandEvent.Created);
-		
+		*/
 		}
 	
 
         private void ProcessLocomotionCommandEvent(object sender, ILocomotionCommandEvent locomotionCommandEvent)
 		{
+			/*
 			Debug.WriteLine("Processing locomotion event: " + sender.GetType());
 			//driveEncoderData = driveEncoderEvent;
 			stepsToRetrace++;
@@ -490,7 +493,7 @@ namespace MistyMapSkill2
 			}
 			
 			movementHistory.Enqueue(locomotionCommandEvent.AngularVelocity, locomotionCommandEvent.LinearVelocity, locomotionCommandEvent.Created);
-		
+	*/
 		}
 
 
