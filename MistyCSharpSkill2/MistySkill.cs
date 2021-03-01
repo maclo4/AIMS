@@ -349,18 +349,18 @@ namespace MistyMapSkill2
 
 			await Task.Delay(5000);
 			movementHistory.RetraceSteps(_misty);
-
-			
 			*/
-			
+
+
 			await Task.Delay(5000);
 
-			//for (int i = 0; i < 5; i++)
-			//{
-				//_misty.DriveArc(IMUData.Yaw - 20, 0, 2000, false, null);
-				dumbRoaming();
-			//}
-			Debug.WriteLine("Retracing complete");
+            for (int i = 0; i < 5; i++)
+            {
+                _misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
+				await Task.Delay(3500);
+                dumbRoaming();
+            }
+            Debug.WriteLine("Retracing complete");
 			while (true) { }
 			// =============================================================================================================
 			// \/ Real code begins again here \/ 
@@ -450,13 +450,13 @@ namespace MistyMapSkill2
 				}
 
 				
-				ICollection<String> Keys = commandEvent.Parameters.Keys;
-				ICollection<object> parameters = commandEvent.Parameters.Values;
-				foreach (KeyValuePair<string, object> kvp in commandEvent.Parameters)
-				{
-					//textBox3.Text += ("Key = {0}, Value = {1}", kvp.Key, kvp.Value);
-					//Debug.WriteLine("Key = {0}, Value = {1}", kvp.Key, kvp.Value);
-				}
+				//ICollection<String> Keys = commandEvent.Parameters.Keys;
+				//ICollection<object> parameters = commandEvent.Parameters.Values;
+				//foreach (KeyValuePair<string, object> kvp in commandEvent.Parameters)
+				//{
+				//	//textBox3.Text += ("Key = {0}, Value = {1}", kvp.Key, kvp.Value);
+				//	//Debug.WriteLine("Key = {0}, Value = {1}", kvp.Key, kvp.Value);
+				//}
 				
 
 				movementHistory.Enqueue(commandEvent);
@@ -641,7 +641,7 @@ namespace MistyMapSkill2
 					//await Task.Delay(2500);
 					Debug.WriteLine("2.5 seconds later: turning 25 degrees");
 
-					//await spinTillOpenArea(1.25);
+					//await  OpenArea(1.25);
 					//_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, OnResponse);
 					//System.Threading.Thread.Sleep(2500);
 
@@ -1187,14 +1187,15 @@ namespace MistyMapSkill2
 			
 			
 			
-			while (elapsedSeconds < 20) // !isMapMostlyFilled(map) && 
+			while (elapsedSeconds < 15) // !isMapMostlyFilled(map) && 
 			{
 				closestTOFSensorReading();
 				if (!isMovingFromHazard && closestObject > .75 && robotState != RobotState.DriveStraight)
 				{
+					// currently just doesnt use the randomness, probably gonna delete it bc it doesnt help
 					double angularVelocity = random.Next(-10, 10);
 					Debug.WriteLine("drivestraight (dumb roam)");
-					_misty.Drive(10, angularVelocity, DriveResponse);
+					_misty.Drive(10, 0, DriveResponse);
 					//roamStates = DumbRoamStates.DriveStraight;
 					robotState = RobotState.DriveStraight;
 				
@@ -1214,9 +1215,11 @@ namespace MistyMapSkill2
 					
 					secondsSinceCommandCalled = 0;
 
-					
 
+					Debug.WriteLine("Post-spinning, pre-drive command");
 					_misty.Drive(10, 0, null);
+					System.Threading.Thread.Sleep(500);
+					Debug.WriteLine("Post-drive command, pre-stop command/");
 				}
 				else if (isMovingFromHazard)
 				{
@@ -1237,7 +1240,7 @@ namespace MistyMapSkill2
 					_misty.DriveTime(-10, 0, 2500, null);
 					System.Threading.Thread.Sleep(2500);
 					//await Task.Delay(2500);
-					spinTillOpenArea(1);
+					spinTillOpenArea(1.25);
 
 					//roamStates = DumbRoamStates.NA;
 					
@@ -1251,8 +1254,8 @@ namespace MistyMapSkill2
 
 			_misty.Drive(0, 0, null);
 			System.Threading.Thread.Sleep(2000);
-			Debug.WriteLine("Code has moved past retrace steps, stepsToRetrace = " + stepsToRetrace);
-			movementHistory.RetraceSteps(_misty, stepsToRetrace + 1);
+			Debug.WriteLine("ROAMING IS DONE WE ARE NOW RETRACING STEPS!!!!!! = " + stepsToRetrace);
+			movementHistory.RetraceSteps(_misty, stepsToRetrace );
 			
 			elapsedSeconds = 0;
 		}
