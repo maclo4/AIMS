@@ -80,6 +80,25 @@ namespace MistyMapSkill2
 		private bool isMovingFromHazard = false;
 
 		/// <summary>
+		/// This is used as a signal to prevent misty from receiving movement commands when she is already moving from a hazard.
+		/// Set to true at the start of a hazard processing and false at the end of a hazard processing.
+		/// </summary>
+		private bool isMovingFromFrontHazard = false;
+
+		/// <summary>
+		/// This is used as a signal to prevent misty from receiving movement commands when she is already moving from a hazard.
+		/// Set to true at the start of a hazard processing and false at the end of a hazard processing.
+		/// </summary>
+		private bool isMovingFromBackHazard = false;
+
+		/// <summary>
+		/// This is used as a signal to prevent misty from receiving movement commands when she is already moving from a hazard.
+		/// Set to true at the start of a hazard processing and false at the end of a hazard processing.
+		/// </summary>
+		private bool isMovingFromFrontAndBackHazard = false;
+
+
+		/// <summary>
 		/// This is used as a signal to prevent misty from receiving multiple "findPose()" commands at once from multiple events which may call "findPose()"
 		/// </summary>
 		bool currentlyFindingPose = false;
@@ -237,11 +256,11 @@ namespace MistyMapSkill2
 			_misty.RegisterSlamStatusEvent(20, true, "Slam Status", null, null);
 			_misty.SlamStatusEventReceived += ProcessSlamStatusEvent;
 
-			_misty.RegisterLocomotionCommandEvent(100, true, null, "Movement Command Event", null);
-			_misty.LocomotionCommandEventReceived += ProcessLocomotionCommandEvent;
+			//_misty.RegisterLocomotionCommandEvent(100, true, null, "Movement Command Event", null);
+			//_misty.LocomotionCommandEventReceived += ProcessLocomotionCommandEvent;
 
-			_misty.RegisterHaltCommandEvent(100, true, "Halt Command Event", null);
-            _misty.HaltCommandEventReceived += ProcessHaltCommandEventReceived;
+			//_misty.RegisterHaltCommandEvent(100, true, "Halt Command Event", null);
+   //         _misty.HaltCommandEventReceived += ProcessHaltCommandEventReceived;
 
 			_misty.RegisterRobotCommandEvent(100, true, "Robot Command Event", null);
 			_misty.RobotCommandEventReceived += ProcessRobotCommandEvent;
@@ -344,28 +363,32 @@ namespace MistyMapSkill2
 			
 	
 			Debug.WriteLine("Start moving now");
-			await Task.Delay(20000);
+			await Task.Delay(1000);
 			Debug.WriteLine("Stop moving");
 
 			await Task.Delay(5000);
 			movementHistory.RetraceSteps(_misty);
-			*/
-
+			
 
 			await Task.Delay(5000);
 
             for (int i = 0; i < 5; i++)
             {
-                _misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
-				await Task.Delay(3500);
+                
+				
                 dumbRoaming();
-            }
+				_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
+				await Task.Delay(3500);
+			}
+			
+
             Debug.WriteLine("Retracing complete");
 			while (true) { }
+			*/
 			// =============================================================================================================
 			// \/ Real code begins again here \/ 
 			// =============================================================================================================
-				
+
 
 			// keep attempting to initialize the slam mapping until misty has a pose (and is exploring and streaming, but those are usually not the problem
 			do
@@ -396,18 +419,18 @@ namespace MistyMapSkill2
 				Debug.WriteLine("initial pose: " + initialPose);
 
 				// not sure if I should be turning on tracking or not
-				//await _misty.StartTrackingAsync();
 				for (int i = 0; i < 5; i++)
-				{
-					_misty.DriveArc(IMUData.Yaw - 20, 0, 2000, false, null);
+				{ 
 					dumbRoaming();
+					_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
+					await Task.Delay(3500);
 				}
-				
+
 				/*
 				await _misty.StartTrackingAsync();
 				await semiSmartRoam();
 				*/
-                
+
 				// I think this is unneccesary now
 				int width = map.Width;
 				int height = map.Height;
@@ -556,7 +579,7 @@ namespace MistyMapSkill2
 			if(lostPose == true && currentlyFindingPose == false)
             {
 				// still very much working on this part so it is commented out for now
-				await findPose();
+				//await findPose();
             }
 		}
 
@@ -588,95 +611,99 @@ namespace MistyMapSkill2
 			//_misty.get hazardEvent.Created;
 			//if (!isMovingFromHazard)
 			//{
-				// set isMovingFromHazard to true so that certain outside functions will not interfere with the hazard processing
-				isMovingFromHazard = true;
+			// set isMovingFromHazard to true so that certain outside functions will not interfere with the hazard processing
+			isMovingFromHazard = true;
 
-				// turns out that "CurrentSensorHazard" does NOT mean the sensor that is currently in hazard, but a sensor that has a electrical current related problem :eyeroll:
-				Collection<SensorHazardStatus> hazardList = new Collection<SensorHazardStatus>(hazardEvent.CurrentSensorsHazard);
+			// turns out that "CurrentSensorHazard" does NOT mean the sensor that is currently in hazard, but a sensor that has a electrical current related problem :eyeroll:
+			Collection<SensorHazardStatus> hazardList = new Collection<SensorHazardStatus>(hazardEvent.CurrentSensorsHazard);
 
-				// list of sensors that have caused misty to stop moving
-				IList<SensorHazardStatus> driveStoppedList = hazardEvent.DriveStopped;
+			// list of sensors that have caused misty to stop moving
+			IList<SensorHazardStatus> driveStoppedList = hazardEvent.DriveStopped;
 
-				// this is mostly for debugging, just to know what is triggering the hazard event
-				getHazardType(hazardEvent);
+			// this is mostly for debugging, just to know what is triggering the hazard event
+			//getHazardType(hazardEvent);
 
-				/*
-				Debug.WriteLine("HazardList: ");
-				for (int i = 0; i < hazardList.Count(); i++) {
-					Debug.WriteLine(hazardList[i].SensorName + ": " + hazardList[i].InHazard);
+			/*
+			Debug.WriteLine("HazardList: ");
+			for (int i = 0; i < hazardList.Count(); i++) {
+				Debug.WriteLine(hazardList[i].SensorName + ": " + hazardList[i].InHazard);
 
-				}
-				Debug.WriteLine("DriveStoppedList: ");
-				for (int i = 0; i < driveStoppedList.Count(); i++)
-				{
-					Debug.WriteLine(driveStoppedList[i].SensorName + ": " + hazardList[i].InHazard);
+			}
+			Debug.WriteLine("DriveStoppedList: ");
+			for (int i = 0; i < driveStoppedList.Count(); i++)
+			{
+				Debug.WriteLine(driveStoppedList[i].SensorName + ": " + hazardList[i].InHazard);
 
-				}
-				*/
+			}
+			*/
 
-				// can't drive forward or back, spin in place
-				if (hazardEvent.FrontHazard && hazardEvent.BackHazard)
-				{
-					_misty.DriveArc(IMUData.Yaw - 35, 0, 2500, false, DriveArcResponse);
-					System.Threading.Thread.Sleep(2500);
-					_misty.Drive(0, 0, null); // ??
-					System.Threading.Thread.Sleep(500);
-					//await Task.Delay(500);
-					Debug.WriteLine("Hazard processing: front and back");
-				}
-				// can't drive forward, so back up and turn away
-				else if (hazardEvent.FrontHazard)
-				{
-					Debug.WriteLine("Attempting to drive backwards");
-					_misty.DriveTime(-10, 0, 4000, null);
+			// can't drive forward or back, spin in place
+			if (hazardEvent.FrontHazard && hazardEvent.BackHazard && isMovingFromFrontAndBackHazard == false)
+			{ 
+				isMovingFromFrontAndBackHazard = true;
+				Debug.WriteLine("Hazard processing: front and back");
+				//_misty.DriveArc(IMUData.Yaw - 35, 0, 2500, false, DriveArcResponse);
+				spinTillOpenArea(1);
+				//System.Threading.Thread.Sleep(2500);
+
+				//_misty.Drive(0, 0, null); // ??
+				//System.Threading.Thread.Sleep(500);
+				//await Task.Delay(500);
+				isMovingFromFrontAndBackHazard = false;
+			}
+			// can't drive forward, so back up and turn away
+			else if (hazardEvent.FrontHazard && isMovingFromFrontHazard == false)
+			{
+				isMovingFromFrontHazard = true;
+				Debug.WriteLine("Attempting to drive backwards");
+				_misty.DriveTime(-10, 0, 4000, null);
 					
-					System.Threading.Thread.Sleep(4000);
-					_misty.Drive(0, 0, null); // ??
-					System.Threading.Thread.Sleep(500);
-					//await Task.Delay(4000);
-					_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, null);
-					System.Threading.Thread.Sleep(2500);
-					_misty.Drive(0, 0, null); // ??
-					System.Threading.Thread.Sleep(500);
-					//await Task.Delay(2500);
-					Debug.WriteLine("2.5 seconds later: turning 25 degrees");
+				System.Threading.Thread.Sleep(4100);
+				//_misty.Drive(0, 0, null); // ??
+				//System.Threading.Thread.Sleep(500);
+				//await Task.Delay(4000);
+				_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, null);
+				System.Threading.Thread.Sleep(2600);
 
-					//await  OpenArea(1.25);
-					//_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, OnResponse);
-					//System.Threading.Thread.Sleep(2500);
+				//_misty.Drive(0, 0, null); // ??
+				//System.Threading.Thread.Sleep(500);
+				//await Task.Delay(2500);
+				Debug.WriteLine("2.5 seconds later: turning 25 degrees");
 
-				}
-				// can't drive backwards, so go forward
-				else if (hazardEvent.BackHazard)
-				{
-					/*
-					_misty.DriveTime(10, 0, 2500, HazardCallback);
-					_misty.PlayAudio("001-EeeeeeE.wav", 1, PlayAudioResponse);
-					System.Threading.Thread.Sleep(2500);
-					_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, DriveArcResponse);
-					System.Threading.Thread.Sleep(2500);
-					*/
-					Debug.WriteLine("Attempting to drive forward");
-					_misty.DriveTime(10, 0, 4000, null);
-					//_misty.PlayAudio("001-EeeeeeE.wav", 1, PlayAudioResponse);
-					System.Threading.Thread.Sleep(4000);
-					_misty.Drive(0, 0, null); // ??
-					System.Threading.Thread.Sleep(500);
-					//await Task.Delay(4000);
-					Debug.WriteLine("4 seconds later: turning 25 degrees");
-					_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, null);
-					System.Threading.Thread.Sleep(2500);
-					_misty.Drive(0, 0, null); // ??
-					System.Threading.Thread.Sleep(500);
-					//await Task.Delay(2500);
+				spinTillOpenArea(1);
+				//_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, OnResponse);
+				//System.Threading.Thread.Sleep(2500);
+				isMovingFromFrontHazard = false;
+			}
+			// can't drive backwards, so go forward
+			else if (hazardEvent.BackHazard && isMovingFromBackHazard == false)
+			{
+				isMovingFromBackHazard = true;
+				Debug.WriteLine("Attempting to drive forward");
+				_misty.DriveTime(10, 0, 4000, null);
+				//_misty.PlayAudio("001-EeeeeeE.wav", 1, PlayAudioResponse);
+				System.Threading.Thread.Sleep(4000);
 
-					//await spinTillOpenArea(1.25);
-				}
-				else
-				{
-					//await spinTillOpenArea();
-				}
-				isMovingFromHazard = false;
+				spinTillOpenArea(1);
+
+				isMovingFromBackHazard = false;
+				//_misty.Drive(0, 0, null); // ??
+				//System.Threading.Thread.Sleep(500);
+				//await Task.Delay(4000);
+				//Debug.WriteLine("4 seconds later: turning 25 degrees");
+				//_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, null);
+				//System.Threading.Thread.Sleep(2500);
+				//_misty.Drive(0, 0, null); // ??
+				//System.Threading.Thread.Sleep(500);
+				////await Task.Delay(2500);
+
+				//await spinTillOpenArea(1.25);
+			}
+			else
+			{
+				//await spinTillOpenArea();
+			}
+			isMovingFromHazard = false;
 			//}
 			//else
 			//{
@@ -1019,7 +1046,7 @@ namespace MistyMapSkill2
 			while (!hasPose)
 			{ 
 
-				await _misty.DriveArcAsync(IMUData.Yaw - 10, .05, 2500, false);
+				await _misty.DriveArcAsync(IMUData.Yaw - 10, 0, 2500, false);
 
 				//System.Threading.Thread.Sleep(15000);
 				await Task.Delay(5000);
@@ -1421,6 +1448,11 @@ namespace MistyMapSkill2
 				var bitMap = setByteArray();
 				setBitmap(bitMap);
 			}
+
+			HazardSettings hazardSettings = new HazardSettings();
+			hazardSettings.DisableTimeOfFlights = false;
+			hazardSettings.RevertToDefault = true;
+			_misty.UpdateHazardSettings(hazardSettings, null);
 
 			await _misty.StopMappingAsync();
 			await _misty.StopSlamStreamingAsync();

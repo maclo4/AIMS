@@ -105,7 +105,7 @@ namespace MistyCSharpSkill2
 					double linearVelocity = Convert.ToDouble(linearVelocityString);
 					double angularVelocity = Convert.ToDouble(angularVelocityString);
 
-					Debug.WriteLine("MoveCommand[" + i + "] Linear Velocity: " + (double)linearVelocity * -1 + ", Angular Velocity: " + (double)angularVelocity * -1 + " , ms: " + (int)millisecondsToDriveFor.TotalMilliseconds);
+					Debug.WriteLine("MoveCommand[" + i + "] Drive() Linear Velocity: " + (double)linearVelocity * -1 + ", Angular Velocity: " + (double)angularVelocity * -1 + " , ms: " + (int)millisecondsToDriveFor.TotalMilliseconds);
 					_misty.DriveTime(linearVelocity * -1, angularVelocity * -1, (int)millisecondsToDriveFor.TotalMilliseconds, DriveTrackResponse);
 
 					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500);
@@ -115,25 +115,24 @@ namespace MistyCSharpSkill2
 					var linearVelocity = Convert.ToDouble(moveCommand.Parameters["LinearVelocity"]);
 					var angularVelocity = Convert.ToDouble(moveCommand.Parameters["AngularVelocity"]);
 					var timeMs = (int)Convert.ToInt64(moveCommand.Parameters["TimeMs"]);
-					Debug.WriteLine("MoveCommand[" + i + "] Linear Velocity: " + (double)linearVelocity * -1 + ", Angular Velocity: " + (double)angularVelocity * -1 + " , ms: " + (int)millisecondsToDriveFor.TotalMilliseconds);
-					_misty.DriveTime(linearVelocity, angularVelocity, timeMs, DriveTrackResponse);
+					Debug.WriteLine("MoveCommand[" + i + "] DrivTime() Linear Velocity: " + (double)linearVelocity * -1 + ", Angular Velocity: " + (double)angularVelocity * -1 + " , ms: " + (int)millisecondsToDriveFor.TotalMilliseconds);
+					_misty.DriveTime(linearVelocity * -1, angularVelocity * -1, timeMs, DriveTrackResponse);
 					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500);
 				}
 				else if(moveCommand.Command == "Stop" || moveCommand.Command == "StopAsync")
                 {
-					Debug.WriteLine("MoveCommand[" + i + "] Linear Velocity: 0, Angular Velocity: 0 , ms: " + (int)millisecondsToDriveFor.TotalMilliseconds);
+					Debug.WriteLine("MoveCommand[" + i + "] Stop() Linear Velocity: 0, Angular Velocity: 0 , ms: " + (int)millisecondsToDriveFor.TotalMilliseconds);
 					_misty.DriveTime(0, 0, (int)millisecondsToDriveFor.TotalMilliseconds, DriveTrackResponse);
 					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500);
 				}
 				else if(moveCommand.Command == "DriveArc" || moveCommand.Command == "DriveArcAsync")
                 {
-					
 					var heading = Convert.ToDouble(moveCommand.Parameters["Heading"]);
 					var radius = Convert.ToDouble(moveCommand.Parameters["Radius"]);
 					var timeMs = (int)Convert.ToInt64(moveCommand.Parameters["TimeMs"]);
                     var reverse = Convert.ToBoolean(moveCommand.Parameters["Reverse"]);
-					Debug.WriteLine("MoveCommand[" + i + "] Heading: " + heading + ", Radius: " + radius + ", TimeMs: " + timeMs + ", Reverse: " + reverse);
-					_misty.DriveArc(heading, radius, timeMs, reverse, DriveTrackResponse);
+					Debug.WriteLine("MoveCommand[" + i + "] DriveArc() Heading: " + heading + ", Radius: " + radius + ", TimeMs: " + timeMs + ", Reverse: " + reverse);
+					_misty.DriveArc(heading, radius, timeMs, !reverse, DriveTrackResponse);
 
 					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500);
 				}
