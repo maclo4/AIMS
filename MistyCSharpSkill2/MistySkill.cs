@@ -144,6 +144,9 @@ namespace MistyMapSkill2
 		private enum DumbRoamStates { Drive360, DriveStraight, NA };
 		DumbRoamStates roamStates = DumbRoamStates.NA;
 
+		private enum HazardStates { Front, Back, FrontAndBack};
+		HazardStates hazardStates;
+
 		/// <summary>
 		/// Used to keep track of what misty is currently doing
 		/// </summary>
@@ -607,10 +610,119 @@ namespace MistyMapSkill2
 			*/
 		}
 
-		/// <summary>
-		/// A somewhat complicated-to-write callback function that attempts to move misty away from any hazards
-		/// </summary>
 		private void ProcessHazardEvent(object sender, IHazardNotificationEvent hazardEvent)
+		{
+			// think of hazardStates as a static variable. Every time a new hazard is sent it will get updated, and the thread that is 
+			// handling the hazard will accordingly react. This prevents there being like 10 different hazard processings going on at once
+
+			if(hazardEvent.FrontHazard && hazardEvent.BackHazard)
+            {
+				hazardStates = HazardStates.FrontAndBack;
+            }
+			else if(hazardEvent.FrontHazard)
+            {
+				hazardStates = HazardStates.Front;
+            }
+			else if(hazardEvent.BackHazard)
+            {
+				hazardStates = HazardStates.Back;
+            }
+
+			if (!isMovingFromHazard)
+			{
+				isMovingFromHazard = true;
+
+				if (hazardStates == HazardStates.FrontAndBack)
+				{
+					// front and back handling
+					handleFrontAndBackHazard();
+
+				}
+				else if (hazardStates == HazardStates.Front)
+				{
+					// front handling
+					handleFrontHazard();
+				}
+				else if (hazardStates == HazardStates.Back)
+				{
+					// back handling
+					handleBackHazard();
+				}
+
+				isMovingFromHazard = false;
+			}
+
+		}
+
+		private void handleFrontAndBackHazard()
+        {
+			bool openAreaFound;
+
+			do { 
+				// if there is a front and back hazard, misty will not be able to spin unless tof snesors are disabled.
+				HazardSettings hazardSettings = new HazardSettings();
+				hazardSettings.DisableTimeOfFlights = true;
+				_misty.UpdateHazardSettings(hazardSettings, null);
+
+				openAreaFound = spinTillOpenArea(1.25);
+
+				if (openAreaFound)
+				{
+					hazardSettings.DisableTimeOfFlights = false;
+					hazardSettings.RevertToDefault = true;
+					_misty.UpdateHazardSettings(hazardSettings, null);
+
+					//return true;
+				}
+				else
+				{
+					//return false;
+				}
+
+			}while(openAreaFound == false);
+
+			_misty.DriveTime(10, 0, 3000, null);
+			System.Threading.Thread.Sleep(3100);
+		}
+
+		private void handleFrontHazard()
+        {	
+			Debug.WriteLine("Attempting to drive backwards");
+			_misty.DriveTime(-10, 0, 3000, null);
+			System.Threading.Thread.Sleep(3100);
+
+			// check if driving backwards caused any more hazards
+			if(hazardStates == HazardStates.Back || hazardStates == HazardStates.FrontAndBack)
+            {
+				// handle back hazard
+				handleFrontAndBackHazard();
+			}
+            else
+            {
+				spinTillOpenArea(1.25);
+            }
+
+		}
+		
+		private void handleBackHazard()
+        {
+			Debug.WriteLine("Attempting to drive forward");
+			_misty.DriveTime(10, 0, 3000, null);
+			System.Threading.Thread.Sleep(3100);
+			// check if driving backwards caused any more hazards
+			if (hazardStates == HazardStates.Front || hazardStates == HazardStates.FrontAndBack)
+			{
+				handleFrontAndBackHazard();
+			}
+			else
+			{
+				spinTillOpenArea(1.25);
+			}
+		}
+			/// <summary>
+			/// A somewhat complicated-to-write callback function that attempts to move misty away from any hazards
+			/// </summary>
+			private void ProcessHazardEventDeprecated(object sender, IHazardNotificationEvent hazardEvent)
 		{
 			
 			//_misty.get hazardEvent.Created;
@@ -671,7 +783,7 @@ namespace MistyMapSkill2
 				isMovingFromFrontHazard = true;
 				Debug.WriteLine("Attempting to drive backwards");
 				_misty.DriveTime(-10, 0, 4000, null);
-					
+
 				System.Threading.Thread.Sleep(4100);
 				//_misty.Drive(0, 0, null); // ??
 				//System.Threading.Thread.Sleep(500);
@@ -727,7 +839,10 @@ namespace MistyMapSkill2
 
 		}
 
+		private void handleHazards()
+        {
 
+        }
 
 		/// <summary>
 		/// Used for debugging, to know what type of hazard triggered the hazard event
@@ -975,7 +1090,7 @@ namespace MistyMapSkill2
 					i++;
 				}
 				_misty.Drive(0,0,null);
-
+				
 				if (closestObject < distance) //msElapsed >= 29000 ||  // degreesTurned >= 355
 				{
 					degreesTurned = 0;
