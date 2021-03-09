@@ -173,27 +173,27 @@ namespace MistyMapSkill2
 		/// <summary>
 		/// This is set by the "closestTOFReading()" function. It represents the closest object to any of the 3 front tof sensors.
 		/// </summary>
-		private double closestObject = 0;
+		private double closestObject = -1;
 
 		/// <summary>
 		/// Current distance reading of the frontRight time of flight sensor
 		/// </summary>
-		private double frontRightTOF = 0;
+		private double frontRightTOF = -1;
 
 		/// <summary>
 		/// Current distance reading of the frontLeft time of flight sensor
 		/// </summary>
-		private double frontLeftTOF = 0;
+		private double frontLeftTOF = -1;
 
 		/// <summary>
 		/// Current distance reading of the frontCenter time of flight sensor
 		/// </summary>
-		private double frontCenterTOF = 0;
+		private double frontCenterTOF = -1;
 
 		/// <summary>
 		/// Current distance reading of the back time of flight sensor
 		/// </summary>
-		private double backTOF = 0;
+		private double backTOF = -1;
 
 		/// <summary>
 		/// Amount of move commands given in this sequence of roaming
@@ -385,8 +385,9 @@ namespace MistyMapSkill2
 			_misty.UpdateHazardSettings(hazardSettings, null);
 
 			await Task.Delay(5000);
+			while (true) { }
 
-            for (int i = 0; i < 5; i++)
+			for (int i = 0; i < 5; i++)
             {
                 
 				
@@ -782,22 +783,35 @@ namespace MistyMapSkill2
 			}
 			else if(hazardState == HazardStates.FrontAndBack)
             {
+				closestTOFSensorReading();
+				while (backTOF == -1 || closestObject == -1) 
+				{
+					closestTOFSensorReading();
+					Debug.WriteLine("Stuck in the while loop: " + backTOF + ", " + closestObject); 
+				}
+				Debug.WriteLine("trying to find middle point between two hazards");
 				if(closestObject > backTOF)
                 {
+					Debug.WriteLine("back tof is closer: " + backTOF + ", " + closestObject);
 					_misty.Drive(2, 0, null);
-					while(backTOF < closestObject + .05 && backTOF > closestObject - .05)
+					while(backTOF > closestObject + .05 && backTOF < closestObject - .05 )
                     {
-
-                    }
+						closestTOFSensorReading();
+						Debug.WriteLine("Stuck in the while loop driving forward: " + backTOF + ", " + closestObject);
+					}
+					Debug.WriteLine("After driving: " + backTOF + ", " + closestObject);
 					_misty.Drive(0, 0, null);
                 }
                 else
                 {
+					Debug.WriteLine("front tof is closer: " + backTOF + ", " + closestObject);
 					_misty.Drive(-2, 0, null);
-					while (closestObject < backTOF + .05 && closestObject > backTOF - .05)
+					while (closestObject > backTOF + .05 && closestObject < backTOF - .05)
 					{
-
+						closestTOFSensorReading();
+						Debug.WriteLine("Stuck in the while loop driving backward: " + backTOF + ", " + closestObject);
 					}
+					Debug.WriteLine("After driving: " + backTOF + ", " + closestObject);
 					_misty.Drive(0, 0, null);
 				}
             }
@@ -923,10 +937,6 @@ namespace MistyMapSkill2
 
 		}
 
-		private void handleHazards()
-        {
-
-        }
 
 		/// <summary>
 		/// Used for debugging, to know what type of hazard triggered the hazard event
@@ -1061,25 +1071,9 @@ namespace MistyMapSkill2
 			}
 			else if(TimeOfFlightEvent.SensorPosition == TimeOfFlightPosition.Back)
             {
+				
 				backTOF = TimeOfFlightEvent.DistanceInMeters;
-            }
-			else if (TimeOfFlightEvent.Status == 104 || TimeOfFlightEvent.Status == 102)
-			{
-				switch (TimeOfFlightEvent.SensorPosition)
-				{
-					case TimeOfFlightPosition.FrontLeft:
-						Debug.WriteLine("Front Left updooted: " + frontLeftTOF);
-						frontLeftTOF = 2;
-						break;
-					case TimeOfFlightPosition.FrontRight:
-						Debug.WriteLine("Front Right updoote: " + frontRightTOF);
-						frontRightTOF = 2;
-						break;
-					case TimeOfFlightPosition.FrontCenter:
-						Debug.WriteLine("Front Center updooted: " + frontCenterTOF);
-						frontCenterTOF = 2;
-						break;
-				}
+				//Debug.WriteLine("back tof updooted: " + backTOF);
 			}
 		}
 
