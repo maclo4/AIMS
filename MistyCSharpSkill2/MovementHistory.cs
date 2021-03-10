@@ -77,6 +77,7 @@ namespace MistyCSharpSkill2
         {
 			HazardSettings hazardSettings = new HazardSettings();
 			hazardSettings.DisableTimeOfFlights = true;
+			hazardSettings.DisableBumpSensors = true;
 			_misty.UpdateHazardSettings(hazardSettings, null);
 
 			currentTime = DateTimeOffset.Now;

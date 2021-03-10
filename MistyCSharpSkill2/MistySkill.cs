@@ -77,7 +77,7 @@ namespace MistyMapSkill2
 		/// This is used as a signal to prevent misty from receiving movement commands when she is already moving from a hazard.
 		/// Set to true at the start of a hazard processing and false at the end of a hazard processing.
 		/// </summary>
-		private bool isMovingFromHazard = false;
+		private static bool isMovingFromHazard = false;
 
 		/// <summary>
 		/// This is used as a signal to prevent misty from receiving movement commands when she is already moving from a hazard.
@@ -128,6 +128,8 @@ namespace MistyMapSkill2
 		/// </summary>
 		bool isTracking = false;
 
+	
+
 		/// <summary>
 		/// Increment this on timer callback
 		/// </summary>
@@ -144,8 +146,10 @@ namespace MistyMapSkill2
 		private enum DumbRoamStates { Drive360, DriveStraight, NA };
 		DumbRoamStates roamStates = DumbRoamStates.NA;
 
-		private enum HazardStates { Front, Back, FrontAndBack};
+		private enum HazardStates { Front, Back, FrontAndBack, NA};
 		HazardStates hazardStates;
+
+		IGetSlamStatusResponse slamStatus;
 
 		/// <summary>
 		/// Used to keep track of what misty is currently doing
@@ -167,7 +171,8 @@ namespace MistyMapSkill2
 		/// This was necessary because often times hazards would call this function many times, so this prevents the function from being called like 10 times in a row.
 		/// </summary>
 		private static IsSpinning isSpinning = IsSpinning.NotSpinning;
-		
+
+		TimeOfFlightPosition initialClosestSensor = TimeOfFlightPosition.Unknown;
 		private enum mappingPhase { Initializing, DumbRoam, SemiSmartRoam, SmartRoam };
 
 		/// <summary>
@@ -233,7 +238,7 @@ namespace MistyMapSkill2
 		/// The parameters can be set in the Skill Runner (or as json) and used in the skill if desired
 		/// </summary>
 		/// <param name="parameters"></param>
-		public async void OnStart(object sender, IDictionary<string, object> parameters)
+		public void OnStart(object sender, IDictionary<string, object> parameters)
 		{
 			dumbRoamTimer.Elapsed += new ElapsedEventHandler(OnTimedEvent);
 			dumbRoamTimer.Start();
@@ -384,8 +389,9 @@ namespace MistyMapSkill2
 			hazardSettings.RevertToDefault = true;
 			_misty.UpdateHazardSettings(hazardSettings, null);
 
-			await Task.Delay(5000);
-			while (true) { }
+			System.Threading.Thread.Sleep(5000);
+			//await Task.Delay(5000);
+			//while (true) { }
 
 			for (int i = 0; i < 5; i++)
             {
@@ -393,7 +399,8 @@ namespace MistyMapSkill2
 				
                 dumbRoaming();
 				_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
-				await Task.Delay(3500);
+				//await Task.Delay(3500);
+				System.Threading.Thread.Sleep(3500);
 			}
 			
 
@@ -409,22 +416,23 @@ namespace MistyMapSkill2
 			do
 			{
 				Debug.WriteLine("Starting mapping (again)");
-				await initializeMapping();
+				initializeMapping();
 			} while (!(isExploring && hasPose && isStreaming));
 
 			// again, ensure that misty has a pose
 			if (isExploring && hasPose && isStreaming)
 			{
 				
-				IGetMapResponse mapResponse;
+				//IGetMapResponse mapResponse;
 
 				// keep driving in circles till the map has some sort of content
 				do
 				{
 					Debug.WriteLine("Trying to get initial map (size > 0)");
-					await drive360();
-					mapResponse = await _misty.GetMapAsync();
-					map = mapResponse.Data;
+					drive360();
+					//mapResponse = await _misty.GetMapAsync();
+					_misty.GetMap(GetMapResponse);
+					//map = mapResponse.Data;
 					Debug.WriteLine("Map size: " + map.Size);
 					Debug.WriteLine("Map width: " + map.Width);
 
@@ -438,7 +446,8 @@ namespace MistyMapSkill2
 				{ 
 					dumbRoaming();
 					_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
-					await Task.Delay(3500);
+					//await Task.Delay(3500);
+
 				}
 
 				/*
@@ -455,8 +464,8 @@ namespace MistyMapSkill2
 
 
 				// just make sure to stop mapping and streaming when the program ends or else misty will just keeping going
-				await _misty.StopMappingAsync();
-				await _misty.StopSlamStreamingAsync();
+				_misty.StopMapping(null);
+				_misty.StopSlamStreaming(null);
 
 			}
 
@@ -569,7 +578,7 @@ namespace MistyMapSkill2
 		/// If misty does not have a pose yet, find it.
 		/// Consider changing this from booleans to some other data type that could combine 4 variables into 1.
 		/// </summary>
-		private async void ProcessSlamStatusEvent(object sender, ISlamStatusEvent slamStatusEvent) 
+		private void ProcessSlamStatusEvent(object sender, ISlamStatusEvent slamStatusEvent) 
 		{
 			//SlamStatusEvent statusEvent = (SlamStatusEvent)slamStatusEvent;
 			
@@ -645,7 +654,7 @@ namespace MistyMapSkill2
 
 			//Debug.WriteLine("isMovingFromHazard: " + isMovingFromHazard);
 
-			if (!isMovingFromHazard)
+			if (!isMovingFromHazard )
 			{
 				isMovingFromHazard = true;
 
@@ -654,21 +663,23 @@ namespace MistyMapSkill2
 					// front and back handling
 					Debug.WriteLine("Handling front and back hazard");
 					handleFrontAndBackHazard();
-
+				
 				}
 				else if (hazardStates == HazardStates.Front)
 				{
 					// front handling
 					Debug.WriteLine("Handling front hazard");
 					handleFrontHazard();
+				
 				}
 				else if (hazardStates == HazardStates.Back)
 				{
 					// back handling
 					Debug.WriteLine("Handling back hazard");
 					handleBackHazard();
+				
 				}
-
+				hazardStates = HazardStates.NA;
 				isMovingFromHazard = false;
 			}
 
@@ -699,8 +710,8 @@ namespace MistyMapSkill2
 				disableTOFHazards();
 				moveAwayFromObstable(HazardStates.FrontAndBack);
 				Debug.WriteLine("hazard spinnin");
+				
 				openAreaFound = spinTillOpenArea(1.25);
-
 				if (openAreaFound)
 				{
 					enableTOFHazards();
@@ -745,8 +756,8 @@ namespace MistyMapSkill2
 			Debug.WriteLine("Attempting to drive forward");
 			//_misty.DriveTime(10, 0, 3000, null);
 			moveAwayFromObstable(HazardStates.Back);
-
 			System.Threading.Thread.Sleep(3100);
+
 			// check if driving backwards caused any more hazards
 			if (hazardStates == HazardStates.Front || hazardStates == HazardStates.FrontAndBack)
 			{
@@ -765,19 +776,24 @@ namespace MistyMapSkill2
         {
 			if (hazardState == HazardStates.Front)
 			{
+				closestTOFSensorReading();
 				_misty.Drive(-5, 0, null);
-				while (closestObject < .15 && backTOF > .15)
+				Debug.WriteLine("pre FRONT while loop backtof and closest object: " + backTOF + ", " + closestObject);
+				while (closestObject < .215 && backTOF > .07)
 				{
-					
+					closestTOFSensorReading();
+					Debug.WriteLine("Stuck in the while loop driving backward: " + backTOF + ", " + closestObject);
 				}
 				_misty.Drive(0, 0, null);
 			}
 			else if(hazardState == HazardStates.Back)
             {
+				closestTOFSensorReading();
 				_misty.Drive(5, 0, null);
-				while (closestObject > .15 && backTOF < .15)
+				Debug.WriteLine("pre BACK while loop backtof and closest object: " + backTOF + ", " + closestObject);
+				while (closestObject > .07 && backTOF < .215)
 				{
-
+					closestTOFSensorReading();
 				}
 				_misty.Drive(0, 0, null);
 			}
@@ -794,8 +810,9 @@ namespace MistyMapSkill2
                 {
 					Debug.WriteLine("back tof is closer: " + backTOF + ", " + closestObject);
 					_misty.Drive(2, 0, null);
-					while(backTOF > closestObject + .05 && backTOF < closestObject - .05 )
-                    {
+					Debug.WriteLine("pre FRONT AND BACK while loop backtof and closest object: " + backTOF + ", " + closestObject);
+					while (backTOF <= closestObject && backTOF < .215) // !(backTOF <= closestObject + .05 && backTOF >= closestObject - .05 )
+					{
 						closestTOFSensorReading();
 						Debug.WriteLine("Stuck in the while loop driving forward: " + backTOF + ", " + closestObject);
 					}
@@ -806,7 +823,8 @@ namespace MistyMapSkill2
                 {
 					Debug.WriteLine("front tof is closer: " + backTOF + ", " + closestObject);
 					_misty.Drive(-2, 0, null);
-					while (closestObject > backTOF + .05 && closestObject < backTOF - .05)
+					Debug.WriteLine("pre FRONT AND BACK while loop backtof and closest object: " + backTOF + ", " + closestObject);
+					while (closestObject <= backTOF && closestObject < .215) // !(closestObject <= backTOF + .05 && closestObject >= backTOF - .05)
 					{
 						closestTOFSensorReading();
 						Debug.WriteLine("Stuck in the while loop driving backward: " + backTOF + ", " + closestObject);
@@ -1104,6 +1122,12 @@ namespace MistyMapSkill2
 		/// </summary>
 		private bool spinTillOpenArea(double distance)
 		{
+
+			//if(isSpinning == IsSpinning.Spinning) 
+			//{
+			//	Debug.WriteLine("spintillopenarea called but was already spinnin");
+			//	return false; 
+			//}
 			Debug.WriteLine("Starting Spinntillopenarea()");
 			int msElapsed;
 			int degreesTurned;
@@ -1116,7 +1140,7 @@ namespace MistyMapSkill2
 			//{
 				degreesTurned = 0;
 				msElapsed = 0;
-				TimeOfFlightPosition initialClosestSensor = TimeOfFlightPosition.Unknown;
+				//TimeOfFlightPosition initialClosestSensor = TimeOfFlightPosition.Unknown;
 				while (!IMUEventReceived)
 				{
 					Debug.WriteLine(IMUEventReceived);
@@ -1135,6 +1159,7 @@ namespace MistyMapSkill2
 					// basically this code is checking the initial direction to turn then its gonna keep turning in that direction till it finds open area
 					if (i == 0 || initialClosestSensor == TimeOfFlightPosition.Unknown)
 					{
+						Debug.WriteLine("getting initial turn direction");
 						initialClosestSensor = turnDirection();
 					}
 					else if (initialClosestSensor == TimeOfFlightPosition.FrontLeft)
@@ -1151,6 +1176,7 @@ namespace MistyMapSkill2
 					Debug.WriteLine("frontlefttof: " + frontLeftTOF);
 					Debug.WriteLine("frontRighttof: " + frontRightTOF);
 					Debug.WriteLine("frontCentertof: " + frontCenterTOF);
+					Debug.WriteLine("i = " + i);
 					Debug.WriteLine("");
 
 					do
@@ -1199,110 +1225,12 @@ namespace MistyMapSkill2
 		
 			Debug.WriteLine("Open area to drive was found!");
 			isSpinning = IsSpinning.NotSpinning;
+			initialClosestSensor = TimeOfFlightPosition.Unknown;
 			return true;
 			
 		}
 
-		private bool spinTillOpenArea(double distance, HazardStates hazardState)
-		{
-			Debug.WriteLine("Starting Hazard version of Spinntillopenarea()");
-			int msElapsed;
-			int degreesTurned;
-			isSpinning = IsSpinning.Spinning;
-
-
-			//_misty.Stop(null);
-
-			//do
-			//{
-			degreesTurned = 0;
-			msElapsed = 0;
-			TimeOfFlightPosition initialClosestSensor = TimeOfFlightPosition.Unknown;
-			while (!IMUEventReceived)
-			{
-				Debug.WriteLine(IMUEventReceived);
-				System.Threading.Thread.Sleep(1000);
-			}
-
-
-			closestTOFSensorReading();
-			//IRobotCommandResponse driveArcResponse;
-			int i = 0;
-			while (i < 5 && closestObject < distance)
-			{
-				msElapsed = 0;
-
-
-				// basically this code is checking the initial direction to turn then its gonna keep turning in that direction till it finds open area
-				if (i == 0 || initialClosestSensor == TimeOfFlightPosition.Unknown)
-				{
-					initialClosestSensor = turnDirection();
-				}
-				else if (initialClosestSensor == TimeOfFlightPosition.FrontLeft)
-				{
-					_misty.DriveArc(IMUData.Yaw - 90, 0, 7500, false, null);
-				}
-				else if (initialClosestSensor == TimeOfFlightPosition.FrontRight)
-				{
-					_misty.DriveArc(IMUData.Yaw + 90, 0, 7500, false, null);
-				}
-
-
-				Debug.WriteLine("Closest Object: " + closestObject);
-				Debug.WriteLine("frontlefttof: " + frontLeftTOF);
-				Debug.WriteLine("frontRighttof: " + frontRightTOF);
-				Debug.WriteLine("frontCentertof: " + frontCenterTOF);
-				Debug.WriteLine("");
-
-				do
-				{
-
-					closestTOFSensorReading();
-					//Debug.WriteLine("Drive arc response: " + driveArcResponse.Status);
-
-					degreesTurned = degreesTurned + 5;
-					msElapsed = msElapsed + 100;
-					System.Threading.Thread.Sleep(100);
-					//await Task.Delay(100);
-
-				} while (closestObject < distance && msElapsed <= 7500); //&& degreesTurned < 355  && driveArcResponse.Status == ResponseStatus.Success
-				i++;
-			}
-			_misty.Drive(0, 0, null);
-
-			if (closestObject < distance) //msElapsed >= 29000 ||  // degreesTurned >= 355
-			{
-				degreesTurned = 0;
-
-				if (closestObject > backTOF)
-				{
-					Debug.WriteLine("Moving forward bc the last spin didnt reveal any open areas");
-					_misty.DriveTime(10, 0, 2500, DriveArcResponse);
-					//await Task.Delay(2500);
-					System.Threading.Thread.Sleep(2500);
-					//await spinTillOpenArea(distance);
-				}
-				else
-				{
-					Debug.WriteLine("Moving backward bc the last spin didnt reveal any open areas");
-					_misty.DriveTime(-10, 0, 2500, DriveArcResponse);
-					//await Task.Delay(2500);
-					System.Threading.Thread.Sleep(2500);
-				}
-
-				return false;
-			}
-			_misty.PlayAudio("001-EeeeeeE.wav", 1, null);
-
-
-
-			//} while (msElapsed <= 29000 || closestObject < distance);
-
-			Debug.WriteLine("Open area to drive was found!");
-			isSpinning = IsSpinning.NotSpinning;
-			return true;
-
-		}
+	
 
 		/// <summary>
 		/// Turn in a specific direction based on which sensor has the object closest to it
@@ -1392,24 +1320,26 @@ namespace MistyMapSkill2
 		/// <summary>
 		/// Keep restarting mapping till this finds a pose
 		/// </summary>
-		private async Task initializeMapping()
+		private void initializeMapping()
 		{
 			if (hasPose && isExploring && isStreaming) return;
 
 			Debug.WriteLine("TURNING OFF AND ON MAPPING");
-			await _misty.StopMappingAsync();
-			await _misty.StopSlamStreamingAsync();
+			_misty.StopMapping(null);
+			_misty.StopSlamStreaming(null);
 
-			await _misty.StartMappingAsync();
+			_misty.StartMapping(null);
 			_misty.StartObstacleDetection(300, null);
-			await _misty.DriveArcAsync(IMUData.Yaw - 25, .05, 2500, false);
+			_misty.DriveArc(IMUData.Yaw - 25, .05, 2500, false, null);
 
-			//System.Threading.Thread.Sleep(15000);
-			await Task.Delay(15000);
-			
+			System.Threading.Thread.Sleep(15000);
+			//await Task.Delay(15000);
 
 
-			IGetSlamStatusResponse slamStatus = await _misty.GetSlamStatusAsync();
+
+			//IGetSlamStatusResponse slamStatus = await _misty.GetSlamStatusAsync();
+			_misty.GetSlamStatus(SlamStatusResponse);
+			System.Threading.Thread.Sleep(3000);
 			SlamStatusDetails slamStatusDetails = slamStatus.Data;
 
 			for (int i = 0; i < slamStatusDetails.StatusList.Length; i++)
@@ -1732,17 +1662,19 @@ namespace MistyMapSkill2
 		/// <summary>
 		/// Drive in a circle
 		/// </summary>
-		private async Task drive360()
+		private void drive360()
 		{
 
 			while (!IMUEventReceived) { }
-			await _misty.DriveArcAsync(IMUData.Yaw - 180, .1, 7000, false);
+			_misty.DriveArc(IMUData.Yaw - 180, .1, 7000, false, null) ;
 
-			_misty.PlayAudio("001-EeeeeeE.wav", 1, PlayAudioResponse); 
-			await Task.Delay(7000);
-			await _misty.DriveArcAsync(IMUData.Yaw - 180, .1, 7000, false);
 			_misty.PlayAudio("001-EeeeeeE.wav", 1, PlayAudioResponse);
-			await Task.Delay(7000);
+			System.Threading.Thread.Sleep(7000);
+			//await Task.Delay(7000);
+			_misty.DriveArc(IMUData.Yaw - 180, .1, 7000, false, null);
+			_misty.PlayAudio("001-EeeeeeE.wav", 1, PlayAudioResponse);
+			System.Threading.Thread.Sleep(7000);
+			//await Task.Delay(7000);
 
 		}
 
@@ -1806,6 +1738,16 @@ namespace MistyMapSkill2
 		public void OnTimeout(object sender, IDictionary<string, object> parameters)
 		{
 			//TODO Put your code here and update the summary above
+		}
+
+		public void SlamStatusResponse(IGetSlamStatusResponse _slamStatus)
+		{
+			slamStatus = _slamStatus;
+        }
+
+		private void GetMapResponse(IGetMapResponse commandResponse)
+		{
+			map = commandResponse.Data;
 		}
 
 		public void OnResponse(IRobotCommandResponse response)
