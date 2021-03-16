@@ -92,11 +92,6 @@ namespace MistyMapSkill2
 			set
 			{
 				_isMovingFromHazard = value;
-			
-				if (value == true)
-				{
-					Debug.WriteLine("isMovingFromHazard is set to true, thread id: " + Thread.CurrentThread.ManagedThreadId);
-				}
 
 			}
 		}
@@ -311,7 +306,7 @@ namespace MistyMapSkill2
             _misty.RegisterRobotCommandEvent(100, true, "Robot Command Event", null);
 			_misty.RobotCommandEventReceived += ProcessRobotCommandEvent;
 
-            HazardEvent += MistySkill_HazardEvent;
+           // HazardEvent += MistySkill_HazardEvent;
 
 			// Check description (All functions should have descriptions if you hover over them)
 			registerTOFEvents();
@@ -426,17 +421,32 @@ namespace MistyMapSkill2
 			hazardSettings.RevertToDefault = true;
 			_misty.UpdateHazardSettings(hazardSettings, null);
 
+			moveCommands.Drive(10, 0, null);
 			System.Threading.Thread.Sleep(5000);
+			
+			moveCommands.Drive(-10, 0, null);
+			System.Threading.Thread.Sleep(5000);
+			
+			moveCommands.Drive(10, 0, null);
+			System.Threading.Thread.Sleep(5000);
+			
+			moveCommands.Drive(-10, 0, null);
+			System.Threading.Thread.Sleep(5000);
+			
+			moveCommands.Drive(10, 0, null);
+			System.Threading.Thread.Sleep(5000);
+		
 			//await Task.Delay(5000);
 
-			moveCommands.Drive(5, 0, DriveResponse); 
+
 			while (true) { }
 
 			for (int i = 0; i < 5; i++)
             {
 
                 dumbRoaming();
-				_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
+				moveCommands.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
+				//_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
 				Debug.WriteLine("main thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
 				//await Task.Delay(3500);
 				System.Threading.Thread.Sleep(3500);
@@ -484,7 +494,8 @@ namespace MistyMapSkill2
 				for (int i = 0; i < 5; i++)
 				{ 
 					dumbRoaming();
-					_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
+					moveCommands.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
+					//_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
 					//await Task.Delay(3500);
 
 				}
@@ -523,7 +534,7 @@ namespace MistyMapSkill2
             {
 				Thread.CurrentThread.Name = "HazardEventThread";
             }
-			Debug.WriteLine("hazard event pausing thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
+			//Debug.WriteLine("hazard event pausing thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
 			//manualResetEvent.WaitOne();
 			//HazardEvent?.Invoke(this, EventArgs.Empty);
 		}
@@ -701,11 +712,11 @@ namespace MistyMapSkill2
 			if (System.Threading.Thread.CurrentThread.Name == null)
 			{
 				System.Threading.Thread.CurrentThread.Name = "HazardThread";
-				Debug.WriteLine("Hazard thread: was null");
+				//Debug.WriteLine("Hazard thread: was null");
 			}
 			else
 			{
-				Debug.WriteLine("Hazard thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
+				//Debug.WriteLine("Hazard thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
 			}
 
 			if (hazardEvent.FrontHazard && hazardEvent.BackHazard)
@@ -1245,21 +1256,23 @@ namespace MistyMapSkill2
 					initialClosestSensor = turnDirection();
 
 					if (initialClosestSensor == TimeOfFlightPosition.FrontLeft)
-					{
-						_misty.DriveArc(IMUData.Yaw - 90, 0, 7500, false, null);
+					{	
+						moveCommands.DriveArc(IMUData.Yaw - 90, 0, 7500, false, null, wasCalledFromHazard);
+						//_misty.DriveArc(IMUData.Yaw - 90, 0, 7500, false, null);
 					}
 					else if (initialClosestSensor == TimeOfFlightPosition.FrontRight)
 					{
-						_misty.DriveArc(IMUData.Yaw + 90, 0, 7500, false, null);
+						moveCommands.DriveArc(IMUData.Yaw + 90, 0, 7500, false, null, wasCalledFromHazard);
+						//_misty.DriveArc(IMUData.Yaw + 90, 0, 7500, false, null);
 					}
 				}
 				else if (initialClosestSensor == TimeOfFlightPosition.FrontLeft)
 				{
-					_misty.DriveArc(IMUData.Yaw - 90, 0, 7500, false, null);
+					moveCommands.DriveArc(IMUData.Yaw - 90, 0, 7500, false, null, wasCalledFromHazard);
 				}
 				else if (initialClosestSensor == TimeOfFlightPosition.FrontRight)
 				{
-					_misty.DriveArc(IMUData.Yaw + 90, 0, 7500, false, null);
+					moveCommands.DriveArc(IMUData.Yaw + 90, 0, 7500, false, null, wasCalledFromHazard);
 				}
 
 
@@ -1287,14 +1300,9 @@ namespace MistyMapSkill2
 
 			}
 
-			if(wasCalledFromHazard == true)
-            {
-				_misty.Drive(0, 0, null);
-			}
-            else
-            {
-				moveCommands.Drive(0, 0, null);
-            }
+			
+				moveCommands.Drive(0, 0, null, wasCalledFromHazard);
+            
 			//while (wasCalledFromHazard == false && isMovingFromHazard == true) { }
 			//_misty.Drive(0, 0, null);
 
@@ -1306,8 +1314,9 @@ namespace MistyMapSkill2
 				{
 					Debug.WriteLine("Moving forward bc the last spin didnt reveal any open areas");
 					while (wasCalledFromHazard == false && isMovingFromHazard == true) { }
-					_misty.DriveTime(10, 0, 2500, DriveArcResponse);
-					//await Task.Delay(2500);
+					moveCommands.DriveTime(10, 0, 2500, DriveArcResponse, wasCalledFromHazard);
+					//_misty.DriveTime(10, 0, 2500, DriveArcResponse);
+					
 					System.Threading.Thread.Sleep(2500);
 					//await spinTillOpenArea(distance);
 				}
@@ -1315,7 +1324,8 @@ namespace MistyMapSkill2
 				{
 					Debug.WriteLine("Moving backward bc the last spin didnt reveal any open areas");
 					while (wasCalledFromHazard == false && isMovingFromHazard == true) { }
-					_misty.DriveTime(-10, 0, 2500, DriveArcResponse);
+					moveCommands.DriveTime(-10, 0, 2500, DriveArcResponse, wasCalledFromHazard);
+					//_misty.DriveTime(-10, 0, 2500, DriveArcResponse);
 					//await Task.Delay(2500);
 					System.Threading.Thread.Sleep(2500);
 				}
@@ -1435,7 +1445,8 @@ namespace MistyMapSkill2
 
 			_misty.StartMapping(null);
 			_misty.StartObstacleDetection(300, null);
-			_misty.DriveArc(IMUData.Yaw - 25, .05, 2500, false, null);
+			moveCommands.DriveArc(IMUData.Yaw - 25, .05, 2500, false, null);
+			//_misty.DriveArc(IMUData.Yaw - 25, .05, 2500, false, null);
 
 			System.Threading.Thread.Sleep(15000);
 			//await Task.Delay(15000);
@@ -1562,7 +1573,7 @@ namespace MistyMapSkill2
 		/// </summary>
 		private static void OnTimedEvent(object source, ElapsedEventArgs e)
 		{
-			Debug.WriteLine("OnTimedEvent thread: " + Thread.CurrentThread.ManagedThreadId + ", " + Thread.CurrentThread.Name);
+			//Debug.WriteLine("OnTimedEvent thread: " + Thread.CurrentThread.ManagedThreadId + ", " + Thread.CurrentThread.Name);
 			if (isSpinning == IsSpinning.NotSpinning)
 			{
 				elapsedSeconds = elapsedSeconds + 3;
@@ -1599,7 +1610,8 @@ namespace MistyMapSkill2
 					// currently just doesnt use the randomness, probably gonna delete it bc it doesnt help
 					double angularVelocity = random.Next(-10, 10);
 					Debug.WriteLine("drivestraight (dumb roam)");
-					_misty.Drive(10, 0, DriveResponse);
+					moveCommands.Drive(10, 0, DriveResponse);
+					//_misty.Drive(10, 0, DriveResponse);
 					//roamStates = DumbRoamStates.DriveStraight;
 					robotState = RobotState.DriveStraight;
 				
@@ -1610,7 +1622,9 @@ namespace MistyMapSkill2
 				else if (!isMovingFromHazard && closestObject < .75)
 				{
 					Debug.WriteLine("find open direction (dumb roam)");
-					_misty.Drive(0, 0, null);
+
+					moveCommands.Drive(0, 0, null);
+					//_misty.Drive(0, 0, null);
 					System.Threading.Thread.Sleep(500);
 					//_misty.Stop(null);
 					spinTillOpenArea(1.25);
@@ -1621,7 +1635,8 @@ namespace MistyMapSkill2
 
 
 					Debug.WriteLine("Post-spinning, pre-drive command");
-					_misty.Drive(10, 0, null);
+					moveCommands.Drive(10, 0, DriveResponse);
+					//_misty.Drive(10, 0, null);
 					System.Threading.Thread.Sleep(500);
 					Debug.WriteLine("Post-drive command, pre-stop command/");
 				}
@@ -1641,7 +1656,8 @@ namespace MistyMapSkill2
 					robotState = RobotState.NA;
 					secondsSinceCommandCalled = 0;
 					Debug.WriteLine("Dumb Roam is not being blocked by hazards, but is neither in state 'drive360' or 'drivestraight'. Try driving backwards.");
-					_misty.DriveTime(-10, 0, 2500, null);
+					moveCommands.DriveTime(-10, 0, 2500, null);
+					//_misty.DriveTime(-10, 0, 2500, null);
 					System.Threading.Thread.Sleep(2500);
 					//await Task.Delay(2500);
 					spinTillOpenArea(1.25);
@@ -1655,8 +1671,8 @@ namespace MistyMapSkill2
                 }
 				
 			}
-
-			_misty.Drive(0, 0, null);
+			moveCommands.Drive(0, 0, null);
+			//_misty.Drive(0, 0, null);
 			System.Threading.Thread.Sleep(2000);
 			Debug.WriteLine("ROAMING IS DONE WE ARE NOW RETRACING STEPS!!!!!! = " + stepsToRetrace);
 			movementHistory.RetraceSteps(_misty, stepsToRetrace );
@@ -1773,12 +1789,14 @@ namespace MistyMapSkill2
 		{
 
 			while (!IMUEventReceived) { }
-			_misty.DriveArc(IMUData.Yaw - 180, .1, 7000, false, null) ;
+			moveCommands.DriveArc(IMUData.Yaw - 180, .1, 7000, false, null);
+			//_misty.DriveArc(IMUData.Yaw - 180, .1, 7000, false, null) ;
 
 			_misty.PlayAudio("001-EeeeeeE.wav", 1, PlayAudioResponse);
 			System.Threading.Thread.Sleep(7000);
 			//await Task.Delay(7000);
-			_misty.DriveArc(IMUData.Yaw - 180, .1, 7000, false, null);
+			moveCommands.DriveArc(IMUData.Yaw - 180, .1, 7000, false, null);
+			//_misty.DriveArc(IMUData.Yaw - 180, .1, 7000, false, null);
 			_misty.PlayAudio("001-EeeeeeE.wav", 1, PlayAudioResponse);
 			System.Threading.Thread.Sleep(7000);
 			//await Task.Delay(7000);

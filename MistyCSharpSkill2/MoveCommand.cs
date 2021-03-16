@@ -21,25 +21,30 @@ namespace MistyCSharpSkill2
             _misty = misty;
             autoEvent = AutoEvent;
         }
-        public void Drive(double linearVelocity, double angularVelocity, ProcessCommandResponse commandCallback)
+        public void Drive(double linearVelocity, double angularVelocity, ProcessCommandResponse commandCallback, bool wasCalledFromHazard = false)
         {
-            if(isMovingFromHazard == true)
+            
+            if(isMovingFromHazard == true && wasCalledFromHazard == false)
             {
+                Debug.WriteLine("Ope gonna wait on the hazard to get handled");
                 autoEvent.WaitOne();
+
+                Debug.WriteLine("signal received!!1!");
             }
             _misty.Drive(linearVelocity, angularVelocity, commandCallback);
+            Debug.WriteLine("drive command ordered");
         }
-        public void DriveTime(double linearVelocity, double angularVelocity, int timeMs, ProcessCommandResponse commandCallback)
+        public void DriveTime(double linearVelocity, double angularVelocity, int timeMs, ProcessCommandResponse commandCallback, bool wasCalledFromHazard = false)
         {
-            if (isMovingFromHazard == true)
+            if (isMovingFromHazard == true && wasCalledFromHazard == false)
             {
                 autoEvent.WaitOne();
             }
             _misty.DriveTime(linearVelocity, angularVelocity, timeMs, commandCallback);
         }
-        public void DriveArc(double heading, double radius, int timeMs, bool reverse, ProcessCommandResponse commandCallback)
+        public void DriveArc(double heading, double radius, int timeMs, bool reverse, ProcessCommandResponse commandCallback, bool wasCalledFromHazard = false)
         {
-            if (isMovingFromHazard == true)
+            if (isMovingFromHazard == true && wasCalledFromHazard == false)
             {
                 autoEvent.WaitOne();
             }
