@@ -117,7 +117,7 @@ namespace MistyCSharpSkill2
 					var angularVelocity = Convert.ToDouble(moveCommand.Parameters["AngularVelocity"]);
 					var timeMs = (int)Convert.ToInt64(moveCommand.Parameters["TimeMs"]);
 					Debug.WriteLine("MoveCommand[" + i + "] DrivTime() Linear Velocity: " + (double)linearVelocity * -1 + ", Angular Velocity: " + (double)angularVelocity * -1 + " , ms: " + (int)millisecondsToDriveFor.TotalMilliseconds);
-					_misty.DriveTime(linearVelocity * -1, angularVelocity * -1, timeMs, DriveTrackResponse);
+					_misty.DriveTime(linearVelocity * -1, angularVelocity * -1, (int)millisecondsToDriveFor.TotalMilliseconds, DriveTrackResponse);
 					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500);
 				}
 				else if(moveCommand.Command == "Stop" || moveCommand.Command == "StopAsync")
