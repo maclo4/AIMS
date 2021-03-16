@@ -24,100 +24,6 @@ using System.Threading;
 using System.ComponentModel;
 //using System.Windows.Forms;
 
-class SimpleAsyncResult : IAsyncResult
-{
-	object _state;
-
-
-	public bool IsCompleted { get; set; }
-
-
-	public WaitHandle AsyncWaitHandle { get; internal set; }
-
-
-	public object AsyncState
-	{
-		get
-		{
-			if (Exception != null)
-			{
-				throw Exception;
-			}
-			return _state;
-		}
-		internal set
-		{
-			_state = value;
-		}
-	}
-
-
-	public bool CompletedSynchronously { get { return IsCompleted; } }
-
-
-	internal Exception Exception { get; set; }
-}
-
-class SimpleSyncObject : ISynchronizeInvoke
-{
-	private readonly object _sync;
-
-
-	public SimpleSyncObject()
-	{
-		_sync = new object();
-	}
-
-
-	public IAsyncResult BeginInvoke(Delegate method, object[] args)
-	{
-		var result = new SimpleAsyncResult();
-
-
-		ThreadPool.QueueUserWorkItem(delegate {
-			result.AsyncWaitHandle = new ManualResetEvent(false);
-			try
-			{
-				result.AsyncState = Invoke(method, args);
-			}
-			catch (Exception exception)
-			{
-				result.Exception = exception;
-			}
-			result.IsCompleted = true;
-		});
-
-
-		return result;
-	}
-
-
-	public object EndInvoke(IAsyncResult result)
-	{
-		if (!result.IsCompleted)
-		{
-			result.AsyncWaitHandle.WaitOne();
-		}
-
-
-		return result.AsyncState;
-	}
-
-
-	public object Invoke(Delegate method, object[] args)
-	{
-		lock (_sync)
-		{
-			return method.DynamicInvoke(args);
-		}
-	}
-
-
-	public bool InvokeRequired
-	{
-		get { return true; }
-	}
-}
 
 namespace MistyMapSkill2
 {
@@ -186,6 +92,7 @@ namespace MistyMapSkill2
 			set
 			{
 				_isMovingFromHazard = value;
+			
 				if (value == true)
 				{
 					Debug.WriteLine("isMovingFromHazard is set to true, thread id: " + Thread.CurrentThread.ManagedThreadId);
@@ -327,8 +234,8 @@ namespace MistyMapSkill2
 		System.Timers.Timer dumbRoamTimer = new System.Timers.Timer(1000);
 
 		public event EventHandler HazardEvent;
-		ManualResetEvent manualResetEvent = new ManualResetEvent(false);
-
+		AutoResetEvent autoResetEvent = new AutoResetEvent(false);
+		MoveCommands moveCommands;
 		/// <summary>
 		/// Skill details for the robot
 		/// 
@@ -362,14 +269,12 @@ namespace MistyMapSkill2
 		public void OnStart(object sender, IDictionary<string, object> parameters)
 		{
 			System.Threading.Thread.CurrentThread.Name = "MainThread";
-			System.ComponentModel.ISynchronizeInvoke synchronizeInvoke = new SimpleSyncObject();
 			
-			dumbRoamTimer.SynchronizingObject = synchronizeInvoke;
 			dumbRoamTimer.Elapsed += new ElapsedEventHandler(OnTimedEvent);
 			dumbRoamTimer.AutoReset = true;
-			
 			dumbRoamTimer.Start();
-		
+
+			moveCommands = new MoveCommands(_misty, autoResetEvent);
 
 			// simply change color to show that the skill has begun
 			_misty.ChangeLED(0, 200, 0, LEDResponse);
@@ -523,7 +428,9 @@ namespace MistyMapSkill2
 
 			System.Threading.Thread.Sleep(5000);
 			//await Task.Delay(5000);
-			//while (true) { }
+
+			moveCommands.Drive(5, 0, DriveResponse); 
+			while (true) { }
 
 			for (int i = 0; i < 5; i++)
             {
@@ -825,7 +732,7 @@ namespace MistyMapSkill2
 			if (!isMovingFromHazard )
 			{
 				isMovingFromHazard = true;
-
+				moveCommands.isMovingFromHazard = true;
 				if (hazardStates == HazardStates.FrontAndBack)
 				{
 					// front and back handling
@@ -849,9 +756,10 @@ namespace MistyMapSkill2
 				}
 				hazardStates = HazardStates.NA;
 				isMovingFromHazard = false;
+				moveCommands.isMovingFromHazard = false;
 			}
 
-			manualResetEvent.Set();
+			autoResetEvent.Set();
 		}
 
 		private void enableTOFHazards()
@@ -947,6 +855,7 @@ namespace MistyMapSkill2
 			{
 				closestTOFSensorReading();
 				_misty.Drive(-5, 0, null);
+
 				Debug.WriteLine("pre FRONT while loop backtof and closest object: " + backTOF + ", " + closestObject);
 				while (closestObject < .215 && backTOF > .07)
 				{
@@ -1003,7 +912,7 @@ namespace MistyMapSkill2
 				}
             }
         }
-
+	
 		/// <summary>
 		/// A somewhat complicated-to-write callback function that attempts to move misty away from any hazards
 		/// </summary>
@@ -1334,6 +1243,15 @@ namespace MistyMapSkill2
 				{
 					Debug.WriteLine("getting initial turn direction");
 					initialClosestSensor = turnDirection();
+
+					if (initialClosestSensor == TimeOfFlightPosition.FrontLeft)
+					{
+						_misty.DriveArc(IMUData.Yaw - 90, 0, 7500, false, null);
+					}
+					else if (initialClosestSensor == TimeOfFlightPosition.FrontRight)
+					{
+						_misty.DriveArc(IMUData.Yaw + 90, 0, 7500, false, null);
+					}
 				}
 				else if (initialClosestSensor == TimeOfFlightPosition.FrontLeft)
 				{
@@ -1369,8 +1287,16 @@ namespace MistyMapSkill2
 
 			}
 
-			while (wasCalledFromHazard == false && isMovingFromHazard == true) { }
-			_misty.Drive(0, 0, null);
+			if(wasCalledFromHazard == true)
+            {
+				_misty.Drive(0, 0, null);
+			}
+            else
+            {
+				moveCommands.Drive(0, 0, null);
+            }
+			//while (wasCalledFromHazard == false && isMovingFromHazard == true) { }
+			//_misty.Drive(0, 0, null);
 
 			if (closestObject < distance) //msElapsed >= 29000 ||  // degreesTurned >= 355
 			{
@@ -1420,11 +1346,11 @@ namespace MistyMapSkill2
 			{
 				case TimeOfFlightPosition.FrontCenter:
 				case TimeOfFlightPosition.FrontLeft:
-					_misty.DriveArc(IMUData.Yaw - 90, 0, 7500, false, null);
+					
 					return TimeOfFlightPosition.FrontLeft;
 					break;
 				case TimeOfFlightPosition.FrontRight:
-					_misty.DriveArc(IMUData.Yaw + 90, 0, 7500, false, null);
+					
 					return TimeOfFlightPosition.FrontRight;
 					break;
 
