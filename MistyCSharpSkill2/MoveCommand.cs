@@ -31,7 +31,7 @@ namespace MistyCSharpSkill2
 
                 Debug.WriteLine("signal received!!1!");
             }
-            _misty.Drive(linearVelocity, angularVelocity, commandCallback);
+            _misty.Drive(linearVelocity, angularVelocity, commandCallback == null ? null : commandCallback);
             Debug.WriteLine("drive command ordered");
         }
         public void DriveTime(double linearVelocity, double angularVelocity, int timeMs, ProcessCommandResponse commandCallback, bool wasCalledFromHazard = false)
@@ -40,7 +40,8 @@ namespace MistyCSharpSkill2
             {
                 autoEvent.WaitOne();
             }
-            _misty.DriveTime(linearVelocity, angularVelocity, timeMs, commandCallback);
+
+            _misty.DriveTime(linearVelocity, angularVelocity, timeMs, commandCallback == null ? null : commandCallback);
         }
         public void DriveArc(double heading, double radius, int timeMs, bool reverse, ProcessCommandResponse commandCallback, bool wasCalledFromHazard = false)
         {
@@ -48,7 +49,14 @@ namespace MistyCSharpSkill2
             {
                 autoEvent.WaitOne();
             }
-            _misty.DriveArc(heading, radius, timeMs, reverse, commandCallback);
+            if (commandCallback != null)
+            {
+                _misty.DriveArc(heading, radius, timeMs, reverse, commandCallback);
+            }
+            else
+            {
+                _misty.DriveArc(heading, radius, timeMs, reverse, null);
+            }
         }
     }
 }

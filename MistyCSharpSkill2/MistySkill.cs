@@ -421,40 +421,26 @@ namespace MistyMapSkill2
 			hazardSettings.RevertToDefault = true;
 			_misty.UpdateHazardSettings(hazardSettings, null);
 
-			moveCommands.Drive(10, 0, null);
-			System.Threading.Thread.Sleep(5000);
-			
-			moveCommands.Drive(-10, 0, null);
-			System.Threading.Thread.Sleep(5000);
-			
-			moveCommands.Drive(10, 0, null);
-			System.Threading.Thread.Sleep(5000);
-			
-			moveCommands.Drive(-10, 0, null);
-			System.Threading.Thread.Sleep(5000);
-			
-			moveCommands.Drive(10, 0, null);
-			System.Threading.Thread.Sleep(5000);
 		
 			//await Task.Delay(5000);
 
 
-			while (true) { }
+			//while (true) { }
 
-			for (int i = 0; i < 5; i++)
-            {
+			//for (int i = 0; i < 5; i++)
+   //         {
 
-                dumbRoaming();
-				moveCommands.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
-				//_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
-				Debug.WriteLine("main thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
-				//await Task.Delay(3500);
-				System.Threading.Thread.Sleep(3500);
-			}
+   //             dumbRoaming();
+			//	moveCommands.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
+			//	//_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
+			//	Debug.WriteLine("main thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
+			//	//await Task.Delay(3500);
+			//	System.Threading.Thread.Sleep(3500);
+			//}
 			
 
-            Debug.WriteLine("Retracing complete");
-			while (true) { }
+           // Debug.WriteLine("Retracing complete");
+			//while (true) { }
 		
 			// =============================================================================================================
 			// \/ Real code begins again here \/ 
@@ -492,12 +478,14 @@ namespace MistyMapSkill2
 
 				// not sure if I should be turning on tracking or not
 				for (int i = 0; i < 5; i++)
-				{ 
+				{
+
 					dumbRoaming();
 					moveCommands.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
 					//_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
+					Debug.WriteLine("main thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
 					//await Task.Delay(3500);
-
+					System.Threading.Thread.Sleep(3500);
 				}
 
 				/*
