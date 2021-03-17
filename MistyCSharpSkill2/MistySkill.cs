@@ -421,33 +421,46 @@ namespace MistyMapSkill2
 			hazardSettings.RevertToDefault = true;
 			_misty.UpdateHazardSettings(hazardSettings, null);
 
-		
+
 			//await Task.Delay(5000);
 
 
 			//while (true) { }
 
 			//for (int i = 0; i < 5; i++)
-   //         {
+			//         {
 
-   //             dumbRoaming();
+			//             dumbRoaming();
 			//	moveCommands.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
 			//	//_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
 			//	Debug.WriteLine("main thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
 			//	//await Task.Delay(3500);
 			//	System.Threading.Thread.Sleep(3500);
 			//}
-			
 
-           // Debug.WriteLine("Retracing complete");
+
+			// Debug.WriteLine("Retracing complete");
 			//while (true) { }
-		
+
 			// =============================================================================================================
 			// \/ Real code begins again here \/ 
 			// =============================================================================================================
 
 
 			// keep attempting to initialize the slam mapping until misty has a pose (and is exploring and streaming, but those are usually not the problem
+			initializeSensorReadings();
+
+			for (int i = 0; i < 5; i++)
+			{
+
+				dumbRoaming();
+				moveCommands.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
+				//_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
+				Debug.WriteLine("main thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
+				//await Task.Delay(3500);
+				System.Threading.Thread.Sleep(3500);
+			}
+			while (true) { }
 			do
 			{
 				Debug.WriteLine("Starting mapping (again)");
@@ -516,6 +529,13 @@ namespace MistyMapSkill2
 
 		}
 
+		private void initializeSensorReadings()
+        {
+			while(IMUEventReceived == false || frontCenterTOF == -1 || frontLeftTOF == -1 || frontRightTOF == -1 || backTOF == -1)
+            {
+
+            }
+        }
         private void OnHazardEvent(IRobotCommandResponse commandResponse)
         {
 			if(System.Threading.Thread.CurrentThread.Name == null)
@@ -777,45 +797,42 @@ namespace MistyMapSkill2
 		}
 		private void handleFrontAndBackHazard()
         {
+			bool hazardHandledSuccessfully = false;
 			bool openAreaFound;
-
 			do {
 
 				Debug.WriteLine("Handling front and back hazard");
 				// if there is a front and back hazard, misty will not be able to spin unless tof snesors are disabled.
 				disableTOFHazards();
-				moveAwayFromObstable(HazardStates.FrontAndBack);
+				hazardHandledSuccessfully = moveAwayFromObstable(HazardStates.FrontAndBack);
 				Debug.WriteLine("hazard spinnin");
 				
 				openAreaFound = spinTillOpenArea(1.25, true);
-				if (openAreaFound)
-				{
-					enableTOFHazards();
-					//return true;
-				}
-				else
-				{
-					//return false;
-				}
+						
 
 			}while(openAreaFound == false);
 
 			_misty.DriveTime(10, 0, 3000, null);
+			enableTOFHazards();
 			System.Threading.Thread.Sleep(3100);
 		}
 
 		private void handleFrontHazard()
-        {	
+        {
+			bool hazardHandledSuccessfully = false;
 			Debug.WriteLine("Attempting to drive backwards");
 			//_misty.DriveTime(-10, 0, 3000, null);
-			moveAwayFromObstable(HazardStates.Front);
-			System.Threading.Thread.Sleep(3100);
+			//System.Threading.Thread.Sleep(3100);
+
+	
+			hazardHandledSuccessfully = moveAwayFromObstable(HazardStates.Front);
+
 
 			// check if driving backwards caused any more hazards
-			if(hazardStates == HazardStates.Back || hazardStates == HazardStates.FrontAndBack)
+			if(hazardStates == HazardStates.Back || hazardStates == HazardStates.FrontAndBack || hazardHandledSuccessfully == false)
             {
 				// handle back hazard
-				handleFrontAndBackHazard();
+				 handleFrontAndBackHazard();
 			}
             else
             {
@@ -829,13 +846,17 @@ namespace MistyMapSkill2
 		
 		private void handleBackHazard()
         {
+			bool hazardHandledSuccessfully = false;
 			Debug.WriteLine("Attempting to drive forward");
 			//_misty.DriveTime(10, 0, 3000, null);
-			moveAwayFromObstable(HazardStates.Back);
-			System.Threading.Thread.Sleep(3100);
+			//System.Threading.Thread.Sleep(3100);
+			
+			hazardHandledSuccessfully = moveAwayFromObstable(HazardStates.Back);
+		
+		
 
 			// check if driving backwards caused any more hazards
-			if (hazardStates == HazardStates.Front || hazardStates == HazardStates.FrontAndBack)
+			if (hazardStates == HazardStates.Front || hazardStates == HazardStates.FrontAndBack || hazardHandledSuccessfully == false)
 			{
 				handleFrontAndBackHazard();
 			}
@@ -848,68 +869,94 @@ namespace MistyMapSkill2
 			}
 		}
 
-		private void moveAwayFromObstable(HazardStates hazardState)
+		private bool moveAwayFromObstable(HazardStates hazardState)
         {
+			Stopwatch stopwatch = new Stopwatch();
+			int timeOutMs = 7000;
 			if (hazardState == HazardStates.Front)
 			{
 				closestTOFSensorReading();
 				_misty.Drive(-5, 0, null);
 
 				Debug.WriteLine("pre FRONT while loop backtof and closest object: " + backTOF + ", " + closestObject);
-				while (closestObject < .215 && backTOF > .07)
+				stopwatch = Stopwatch.StartNew();
+				while ((closestObject < .215 && backTOF > .07 ) || stopwatch.ElapsedMilliseconds > timeOutMs)
 				{
+					
 					closestTOFSensorReading();
 					//Debug.WriteLine("Stuck in the while loop driving backward: " + backTOF + ", " + closestObject);
 				}
+				stopwatch.Stop();
 				_misty.Drive(0, 0, null);
+
+				if(stopwatch.ElapsedMilliseconds > timeOutMs && closestObject >= .215)
+                {
+					return false;
+                }
 			}
 			else if(hazardState == HazardStates.Back)
             {
 				closestTOFSensorReading();
 				_misty.Drive(5, 0, null);
-				//Debug.WriteLine("pre BACK while loop backtof and closest object: " + backTOF + ", " + closestObject);
-				while (closestObject > .07 && backTOF < .215)
+				Debug.WriteLine("pre BACK while loop backtof and closest object: " + backTOF + ", " + closestObject);
+				stopwatch = Stopwatch.StartNew();
+				while (closestObject > .07 && backTOF < .215 || stopwatch.ElapsedMilliseconds > timeOutMs)
 				{
 					closestTOFSensorReading();
 				}
 				_misty.Drive(0, 0, null);
+
+				if (stopwatch.ElapsedMilliseconds > timeOutMs && backTOF >= .215)
+				{
+					return false;
+				}
 			}
 			else if(hazardState == HazardStates.FrontAndBack)
             {
 				closestTOFSensorReading();
-				while (backTOF == -1 || closestObject == -1) 
-				{
-					closestTOFSensorReading();
-					//Debug.WriteLine("Stuck in the while loop: " + backTOF + ", " + closestObject); 
-				}
+			
+				
 				Debug.WriteLine("trying to find middle point between two hazards");
 				if(closestObject > backTOF)
                 {
 					Debug.WriteLine("back tof is closer: " + backTOF + ", " + closestObject);
 					_misty.Drive(2, 0, null);
 					Debug.WriteLine("pre FRONT AND BACK while loop backtof and closest object: " + backTOF + ", " + closestObject);
-					while (backTOF <= closestObject && backTOF < .215) // !(backTOF <= closestObject + .05 && backTOF >= closestObject - .05 )
+					stopwatch = Stopwatch.StartNew();
+					while (backTOF <= closestObject && backTOF < .215 || stopwatch.ElapsedMilliseconds > timeOutMs) // !(backTOF <= closestObject + .05 && backTOF >= closestObject - .05 )
 					{
 						closestTOFSensorReading();
 						//Debug.WriteLine("Stuck in the while loop driving forward: " + backTOF + ", " + closestObject);
 					}
 					Debug.WriteLine("After driving: " + backTOF + ", " + closestObject);
 					_misty.Drive(0, 0, null);
-                }
+
+					if (stopwatch.ElapsedMilliseconds > timeOutMs)
+					{
+						return false;
+					}
+				}
                 else
                 {
 					Debug.WriteLine("front tof is closer: " + backTOF + ", " + closestObject);
 					_misty.Drive(-2, 0, null);
 					Debug.WriteLine("pre FRONT AND BACK while loop backtof and closest object: " + backTOF + ", " + closestObject);
-					while (closestObject <= backTOF && closestObject < .215) // !(closestObject <= backTOF + .05 && closestObject >= backTOF - .05)
+					stopwatch = Stopwatch.StartNew();
+					while (closestObject <= backTOF && closestObject < .215 || stopwatch.ElapsedMilliseconds > timeOutMs) // !(closestObject <= backTOF + .05 && closestObject >= backTOF - .05)
 					{
 						closestTOFSensorReading();
 						// Debug.WriteLine("Stuck in the while loop driving backward: " + backTOF + ", " + closestObject);
 					}
 					Debug.WriteLine("After driving: " + backTOF + ", " + closestObject);
 					_misty.Drive(0, 0, null);
+
+					if (stopwatch.ElapsedMilliseconds > timeOutMs)
+					{
+						return false;
+					}
 				}
             }
+			return true;
         }
 	
 		/// <summary>
