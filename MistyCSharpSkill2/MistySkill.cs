@@ -644,7 +644,7 @@ namespace MistyMapSkill2
 
 		/// <summary>
 		/// Attempts to move away from front hazard 
-		/// TODO: split into smaller functions
+		/// TODO: split into smaller functions. Potentially just use the logic for front and back only
 		/// </summary>
 		private bool moveAwayFromObstable(HazardStates hazardState)
         {
@@ -929,16 +929,16 @@ namespace MistyMapSkill2
 			System.Threading.Thread CurrentThread = System.Threading.Thread.CurrentThread;
 			Debug.WriteLine("Starting Spinntillopenarea(), hazard state = " + wasCalledFromHazard + ", currentThread = " + CurrentThread.Name);
 
+			Stopwatch stopwatch = Stopwatch();
 			int msElapsed;
-			int degreesTurned;
+			
 
 			// flag to let other threads n stuff know that spinning has begun
 			// TODO: whats a better way to have flags besides booleans??
 			isSpinning = IsSpinning.Spinning;
 
-			// TODO: turn these 2 variables into 1
-			degreesTurned = 0;
-			msElapsed = 0;
+			// TODO: this is bad, use a timer or anything else. Okay I did it but still TODO is testing to make sure I didnt screw anything up (doubtful)
+			//msElapsed = 0;
 
 			// get current closest front object
 			closestTOFSensorReading();
@@ -976,6 +976,7 @@ namespace MistyMapSkill2
 				{
 					moveCommands.DriveArc(IMUData.Yaw + 90, 0, 7500, false, null, wasCalledFromHazard);
 				}
+				stopwatch = Stopwatch.StartNew();
 
 				// output the current sensor readings and other important information
 				Debug.WriteLine("Closest Object: " + closestObject);
@@ -988,19 +989,16 @@ namespace MistyMapSkill2
 
 				do
 				{
-
 					closestTOFSensorReading();
 				
-					// yea this is a mess idek what to do with it TODO
-					degreesTurned = degreesTurned + 5;
-					msElapsed = msElapsed + 100;
+					//msElapsed = msElapsed + 100;
 					System.Threading.Thread.Sleep(100);
-					//await Task.Delay(100);
-
-				} while (closestObject < distance && msElapsed <= 7500); //&& degreesTurned < 355  && driveArcResponse.Status == ResponseStatus.Success
+				} while (closestObject < distance && stopwatch.ElapsedMilliseconds == 7500); //&& degreesTurned < 355  && driveArcResponse.Status == ResponseStatus.Success
 				i++;
 
 			}
+
+			stopwatch.Stop();
 
 			// stop spinning after object is found or loop times out
 			moveCommands.Drive(0, 0, null, wasCalledFromHazard);
@@ -1009,7 +1007,7 @@ namespace MistyMapSkill2
 			// TODO: implement moveawayfromobstacle here
 			if (closestObject < distance) //msElapsed >= 29000 ||  // degreesTurned >= 355
 			{
-				degreesTurned = 0;
+				
 
 				if (closestObject > backTOF)
 				{

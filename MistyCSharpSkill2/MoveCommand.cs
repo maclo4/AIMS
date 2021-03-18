@@ -36,10 +36,11 @@ namespace MistyCSharpSkill2
         /// </summary>
         /// <param name="misty">Pass the _misty variable used in the rest of the program</param>
         /// <param name="AutoEvent">Pass in the AutoResetEvent used in the hazard events</param>
-        public MoveCommands(IRobotMessenger misty, AutoResetEvent AutoEvent)
+        public MoveCommands(IRobotMessenger misty, AutoResetEvent AutoEvent) // TODO:  ref bool _isMovingFromHazard test how refs work in c#
         {
             _misty = misty;
             autoEvent = AutoEvent;
+            //isMovingFromHazard = _isMovingFromHazard;
         }
 
         /// <summary>
