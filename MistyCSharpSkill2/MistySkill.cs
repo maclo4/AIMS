@@ -82,24 +82,9 @@ namespace MistyMapSkill2
 		/// Set to true at the start of a hazard processing and false at the end of a hazard processing.
 		/// </summary>
 		
-		public static bool isMovingFromHazard
-		{
-			get
-			{
-				
-				return _isMovingFromHazard;
-			}
-			set
-			{
-				_isMovingFromHazard = value;
+		// TODO: make this thread safe
+		public  static bool isMovingFromHazard{ get; set;}
 
-			}
-		}
-		private static bool _isMovingFromHazard;
-
-
-	
-		
 		/// <summary>
 		/// This is used as a signal to prevent misty from receiving movement commands when she is already moving from a hazard.
 		/// Set to true at the start of a hazard processing and false at the end of a hazard processing.
@@ -161,13 +146,12 @@ namespace MistyMapSkill2
 		/// </summary>
 		private static int secondsSinceCommandCalled = 0;
 
-		/// <summary>
-		/// Ideally used to keep track of what misty is currently doing during "dumbRoaming()", but was replaced by "robotState"
-		/// </summary>
-		private enum DumbRoamStates { Drive360, DriveStraight, NA };
-		DumbRoamStates roamStates = DumbRoamStates.NA;
 
 		private enum HazardStates { Front, Back, FrontAndBack, NA};
+		
+		/// <summary>
+		/// This indicates what direction the current hazard is coming from
+		/// </summary>
 		HazardStates hazardStates;
 
 		IGetSlamStatusResponse slamStatus;
@@ -176,6 +160,7 @@ namespace MistyMapSkill2
 		/// Used to keep track of what misty is currently doing
 		/// </summary>
 		private enum RobotState { Spinning, DriveStraight, DriveBackwards, Stopped, Hazard, NA};
+
 		/// <summary>
 		/// Used to keep track of what misty is currently doing
 		/// </summary>
@@ -193,8 +178,11 @@ namespace MistyMapSkill2
 		/// </summary>
 		private static IsSpinning isSpinning = IsSpinning.NotSpinning;
 
+		/// <summary>
+		/// This is used in spinTillOpenArea() and closestTOFSensorReading() to indicate spin direction
+		/// </summary>
 		TimeOfFlightPosition initialClosestSensor = TimeOfFlightPosition.Unknown;
-		private enum mappingPhase { Initializing, DumbRoam, SemiSmartRoam, SmartRoam };
+
 
 		/// <summary>
 		/// This is set by the "closestTOFReading()" function. It represents the closest object to any of the 3 front tof sensors.
@@ -226,11 +214,21 @@ namespace MistyMapSkill2
 		/// </summary>
 		int stepsToRetrace = 0;
 
+		/// <summary>
+		/// Timer that ensures dumb roaming stops after a certain amount of time 
+		/// </summary>
 		System.Timers.Timer dumbRoamTimer = new System.Timers.Timer(1000);
 
-		public event EventHandler HazardEvent;
+		/// <summary>
+		/// This is used to ensure that no commands are issued while hazards are happening
+		/// </summary>
 		AutoResetEvent autoResetEvent = new AutoResetEvent(false);
+
+		/// <summary>
+		/// This class is a wrapper class for misty move commands. It takes in the same parameters but prevents movement while hazards are being handled
+		/// </summary>
 		MoveCommands moveCommands;
+
 		/// <summary>
 		/// Skill details for the robot
 		/// 
@@ -269,174 +267,18 @@ namespace MistyMapSkill2
 			dumbRoamTimer.AutoReset = true;
 			dumbRoamTimer.Start();
 
+			//TODO: comment move commands class
 			moveCommands = new MoveCommands(_misty, autoResetEvent);
 
-			// simply change color to show that the skill has begun
-			_misty.ChangeLED(0, 200, 0, LEDResponse);
-
-			// Listen to the IMU event which gives positional data about misty
-			_misty.RegisterIMUEvent(IMUCallback, 0, true, null, null, null);
-
-			// Listen to the drive encoder event which we use for its velocity information (check if misty is moving or not)
-			// Add a function (+=) that gets called whenever the event is received
-			_misty.RegisterDriveEncoderEvent(100, true, null, "Drive Encoder Event", OnResponse);
-			_misty.DriveEncoderEventReceived += ProcessDriveEncoderEvent;
-
-			// Listen to the self state event which we use to get misty's pose, or position in the world
-			// once again, add a function (+=) that gets called whenever the event is received/triggered
-			_misty.RegisterSelfStateEvent(250, true, "SelfState", OnResponse);
-			_misty.SelfStateEventReceived += ProcessSelfStateEvent;
-
-			// Listen for hazard events. By default most hazards just cause misty to stop moving. We would like misty to navigate away from hazards
-			// once again, add a function (+=) that gets called whenever the event is received/triggered
-			_misty.RegisterHazardNotificationEvent(300, true, "Hazard Event", OnHazardEvent);
-			_misty.HazardNotificationEventReceived += ProcessHazardEvent;
-			
-
-			// Listen to the slam status event, set booleans such as "isExploring", "hasPose", "isStreaming" to true or false
-			_misty.RegisterSlamStatusEvent(20, true, "Slam Status", null, null);
-			_misty.SlamStatusEventReceived += ProcessSlamStatusEvent;
-
-            //_misty.RegisterLocomotionCommandEvent(100, true, null, "Movement Command Event", null);
-            //_misty.LocomotionCommandEventReceived += ProcessLocomotionCommandEvent;
-
-            //_misty.RegisterHaltCommandEvent(100, true, "Halt Command Event", null);
-            //         _misty.HaltCommandEventReceived += ProcessHaltCommandEventReceived;
-
-            _misty.RegisterRobotCommandEvent(100, true, "Robot Command Event", null);
-			_misty.RobotCommandEventReceived += ProcessRobotCommandEvent;
-
-           // HazardEvent += MistySkill_HazardEvent;
-
 			// Check description (All functions should have descriptions if you hover over them)
-			registerTOFEvents();
+			registerMistyEvents();
 
-			//System.Threading.Thread.CurrentThread.Name = "MainThread";
-			Thread currThread = Thread.CurrentThread;
 			
 			Debug.WriteLine("Current thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
+
 			// =============================================================================================================
 			// Temporary code, isolating certain parts of the code to test more efficiently
 			// =============================================================================================================
-
-
-
-			/*
-			IGetCurrentSlamMapResponse currentMap = await _misty.GetCurrentSlamMapAsync();
-
-			Debug.WriteLine("current map: " + currentMap.Data);
-			await _misty.StartSlamStreamingAsync();
-			await _misty.StartTrackingAsync();
-
-			while (!(isTracking && hasPose && isStreaming)) 
-			{
-				IGetSlamStatusResponse slamStatus = await _misty.GetSlamStatusAsync();
-
-				//SlamStatusDetails slamStatusDetails = slamStatus.Data;
-
-				//for (int i = 0; i < slamStatusDetails.StatusList.Length; i++)
-				//{
-				//	//Debug.WriteLine("Slam status[" + i + "]: " + slamStatusDetails.StatusList[i]);
-				//	if (slamStatusDetails.StatusList[i] == "Exploring")
-				//		isExploring = true;
-				//	else if (slamStatusDetails.StatusList[i] == "HasPose")
-				//		hasPose = true;
-				//	else if (slamStatusDetails.StatusList[i] == "Streaming")
-				//		isStreaming = true;
-				//	else if (slamStatusDetails.StatusList[i] == "LostPose")
-				//		hasPose = false;
-				//	else if (slamStatusDetails.StatusList[i] == "Tracking")
-				//		isTracking = true;
-				//}
-			}
-
-			initialPose = pose;
-			await semiSmartRoam();
-	
-
-
-
-			//await spinTillOpenArea(1);
-			//dumbRoaming();
-			await _misty.StartMappingAsync();
-
-			await _misty.StartTrackingAsync();
-		
-			
-			while (true)
-				{
-				IGetSlamStatusResponse slamStatus = await _misty.GetSlamStatusAsync();
-			
-                for (int i = 0; i < slamStatus.Data.StatusList.Length; i++)
-                {
-                    Debug.WriteLine("Slam status[" + i + "]: " + slamStatus.Data.StatusList[i]);
-                    if (slamStatus.Data.StatusList[i] == "Exploring")
-                        isExploring = true;
-                    else if (slamStatus.Data.StatusList[i] == "HasPose")
-                        hasPose = true;
-                    else if (slamStatus.Data.StatusList[i] == "Streaming")
-                        isStreaming = true;
-                    else if (slamStatus.Data.StatusList[i] == "LostPose")
-                        hasPose = false;
-                    else if (slamStatus.Data.StatusList[i] == "Tracking")
-                        isTracking = true;
-                }
-				await Task.Delay(100);
-            }
-
-				
-
-
-			//	_misty.RegisterObstacleMapEvent(300, true, "Obstacle Event", null);
-			//_misty.ObstacleMapEventReceived += ProcessObstacleMapEvent;
-		
-		
-
-			await Task.Delay(2500);
-
-			
-			_misty.DriveArc(IMUData.Yaw - 90, 0, 2500, false, null);
-			await Task.Delay(3000);
-
-			_misty.DriveArc(IMUData.Yaw, 0, 0, false, null); // ??
-
-			await Task.Delay(3000);
-
-			_misty.DriveArc(IMUData.Yaw - 90, 0, 2500, false, null);
-			await Task.Delay(3000);
-
-			_misty.Drive(0, 0, null); // ??
-			
-	
-			Debug.WriteLine("Start moving now");
-			await Task.Delay(1000);
-			Debug.WriteLine("Stop moving");
-
-			await Task.Delay(5000);
-			movementHistory.RetraceSteps(_misty);
-			
-				*/
-			HazardSettings hazardSettings = new HazardSettings();
-			hazardSettings.DisableTimeOfFlights = false;
-			hazardSettings.RevertToDefault = true;
-			_misty.UpdateHazardSettings(hazardSettings, null);
-
-
-			//await Task.Delay(5000);
-
-
-			//while (true) { }
-
-			//for (int i = 0; i < 5; i++)
-			//         {
-
-			//             dumbRoaming();
-			//	moveCommands.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
-			//	//_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
-			//	Debug.WriteLine("main thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
-			//	//await Task.Delay(3500);
-			//	System.Threading.Thread.Sleep(3500);
-			//}
 
 
 			// Debug.WriteLine("Retracing complete");
@@ -446,21 +288,21 @@ namespace MistyMapSkill2
 			// \/ Real code begins again here \/ 
 			// =============================================================================================================
 
-
-			// keep attempting to initialize the slam mapping until misty has a pose (and is exploring and streaming, but those are usually not the problem
+			// sometimes they get changed, just make sure theyre all set back to normal
+			SetDefaultHazardSettings();
+			
+			// just make sure the variables for the sensors all have a reading
 			initializeSensorReadings();
 
 			for (int i = 0; i < 5; i++)
 			{
-
 				dumbRoaming();
 				moveCommands.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
-				//_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
-				Debug.WriteLine("main thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
-				//await Task.Delay(3500);
 				System.Threading.Thread.Sleep(3500);
 			}
+
 			while (true) { }
+
 			do
 			{
 				Debug.WriteLine("Starting mapping (again)");
@@ -492,14 +334,11 @@ namespace MistyMapSkill2
 				// not sure if I should be turning on tracking or not
 				for (int i = 0; i < 5; i++)
 				{
-
 					dumbRoaming();
 					moveCommands.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
-					//_misty.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
-					Debug.WriteLine("main thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
-					//await Task.Delay(3500);
 					System.Threading.Thread.Sleep(3500);
 				}
+
 
 				/*
 				await _misty.StartTrackingAsync();
@@ -529,61 +368,56 @@ namespace MistyMapSkill2
 
 		}
 
+		/// <summary>
+		/// Just make sure that all the sensor variables are initialized
+		/// </summary>
 		private void initializeSensorReadings()
         {
-			while(IMUEventReceived == false || frontCenterTOF == -1 || frontLeftTOF == -1 || frontRightTOF == -1 || backTOF == -1)
-            {
-
-            }
+			Debug.WriteLine("Getting initial sensor readings...");
+			while (IMUEventReceived == false || frontCenterTOF == -1 || frontLeftTOF == -1 || frontRightTOF == -1 || backTOF == -1) { }
+       
         }
+
+		/// <summary>
+		/// callback function for the hazard event. Not really necessary but doesnt do hard
+		/// </summary>
+		/// <param name="commandResponse">Standard IRobotCommandResponse</param>
         private void OnHazardEvent(IRobotCommandResponse commandResponse)
         {
 			if(System.Threading.Thread.CurrentThread.Name == null)
             {
 				Thread.CurrentThread.Name = "HazardEventThread";
             }
-			//Debug.WriteLine("hazard event pausing thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
-			//manualResetEvent.WaitOne();
-			//HazardEvent?.Invoke(this, EventArgs.Empty);
+	
 		}
 
-        private void MistySkill_HazardEvent(object sender, EventArgs e)
-        {
-			Debug.WriteLine("hazard event pausing thread: " + System.Threading.Thread.CurrentThread.Name);
-			//manualResetEvent.WaitOne();
-		}
-
+		/// <summary>
+		/// Any time that misty receives any command it will go to here. We are only really interested in the movement commands. TODO: Filter out all non-movement commands
+		/// </summary>
+		/// <param name="sender"></param>
+		/// <param name="commandEvent"></param>
         private void ProcessRobotCommandEvent(object sender, IRobotCommandEvent commandEvent)
         {
-			
-			
-			
+			// ensure that its a drive command
 			if( commandEvent.Command == "Drive" || commandEvent.Command == "DriveTime" || 
 				commandEvent.Command == "DriveAsync" || commandEvent.Command == "DriveTimeAsync" ||
 				commandEvent.Command == "DriveHeading" || commandEvent.Command == "DriveHeadingAsync" ||
 				commandEvent.Command == "DriveTrack" || commandEvent.Command == "DriveTrackAsync" || commandEvent.Command == "Stop")
             {
+				//increment steps to retrace bc youre also about to add this movement to the MovementHistory queue
 				stepsToRetrace++;
 				Debug.WriteLine("Robot Command Event: " + commandEvent.Command);
+
+				// the first command is used to initialize the movement history. TODO: theres probly a better way to initialize this than having a boolean keep track of it
 				if (firstMove == true)
 				{
 					movementHistory = new MovementHistory(commandEvent.Created);
 					firstMove = false;
 				}
 
-                //if (commandEvent.Command == "Drive" || commandEvent.Command == "DriveTime")
-                //{
-                //    foreach (KeyValuePair<string, object> kvp in commandEvent.Parameters)
-                //    {
-                       
-                //        Debug.WriteLine("Key = {0}, Value = {1}", kvp.Key, kvp.Value);
-                //    }
-                //}
-
-
-
 				movementHistory.Enqueue(commandEvent);
 			}
+			// this else if is the same as above except it handles drive arc commands
 			else if(commandEvent.Command == "DriveArc" || commandEvent.Command == "DriveArcAsync")
             {
 				Debug.WriteLine("Robot Command Event: " + commandEvent.Command);
@@ -593,50 +427,14 @@ namespace MistyMapSkill2
 					movementHistory = new MovementHistory(commandEvent.Created);
 					firstMove = false;
 				}
+				// for retracing these, the robot should trace back to the original heading
 				IRobotCommandEvent driveArcCommand = commandEvent;
 				driveArcCommand.Parameters["Heading"] = IMUData.Yaw; 
 				movementHistory.Enqueue(driveArcCommand);
 			}
-			//_misty.Execute()
+			
 
 		}
-
-        private void ProcessHaltCommandEventReceived(object sender, IHaltCommandEvent haltCommandEvent)
-        {
-			/*
-			stepsToRetrace++;
-			Debug.WriteLine("Processing halt command (good if this shows up)");
-			if (firstMove == true)
-			{
-				movementHistory = new MovementHistory(haltCommandEvent.Created);
-				firstMove = false;
-			}
-
-			movementHistory.Enqueue(0, 0, haltCommandEvent.Created);
-		*/
-		}
-	
-
-        private void ProcessLocomotionCommandEvent(object sender, ILocomotionCommandEvent locomotionCommandEvent)
-		{
-		
-			Debug.WriteLine("Processing locomotion event: " + sender.GetType());
-			Debug.WriteLine("Linear velocity: " + locomotionCommandEvent.LinearVelocity);
-			Debug.WriteLine("Angular velocity: " + locomotionCommandEvent.AngularVelocity);
-			//driveEncoderData = driveEncoderEvent;
-			/*
-		stepsToRetrace++;
-
-		if (firstMove == true)
-		{
-			movementHistory = new MovementHistory(locomotionCommandEvent.Created);
-			firstMove = false;
-		}
-
-		movementHistory.Enqueue(locomotionCommandEvent.AngularVelocity, locomotionCommandEvent.LinearVelocity, locomotionCommandEvent.Created);
-		*/
-		}
-
 
 
 		/// <summary>
@@ -645,7 +443,6 @@ namespace MistyMapSkill2
 		private void ProcessSelfStateEvent(object sender, ISelfStateEvent selfStateEvent)
 		{
 			pose = selfStateEvent.Pose;
-			//pose.;
 		}
 
 		/// <summary>
@@ -679,6 +476,8 @@ namespace MistyMapSkill2
 
 			}
 
+			// TODO: The mapping just stopped working so Im not sure if I'll need this. It seems like I shouldnt need it with properly working hardware bc 
+			// misty already retraces her steps. So if she loses pose, eventually shell find it again onces shes in the middle of the room
 			if(lostPose == true && currentlyFindingPose == false)
             {
 				// still very much working on this part so it is commented out for now
@@ -692,41 +491,18 @@ namespace MistyMapSkill2
 		private void ProcessDriveEncoderEvent(object sender, IDriveEncoderEvent driveEncoderEvent)
 		{
 			driveEncoderData = driveEncoderEvent;
-			/*
-			if (firstMove == true)
-			{
-				movementHistory = new MovementHistory(driveEncoderEvent);
-				firstMove = false;
-			}
-			else
-			{
-				movementHistory.Enqueue(driveEncoderEvent);
-			}
-			*/
+			
 		}
 
-		private async void ProcessHazardEvent(object sender, IHazardNotificationEvent hazardEvent)
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="sender"></param>
+		/// <param name="hazardEvent"></param>
+		private void ProcessHazardEvent(object sender, IHazardNotificationEvent hazardEvent)
 		{
 			// think of hazardStates as a static variable. Every time a new hazard is sent it will get updated, and the thread that is 
 			// handling the hazard will accordingly react. This prevents there being like 10 different hazard processings going on at once
-
-			//         while (true)
-			//{
-			//	Debug.WriteLine("Hazard loopin");
-			//	System.Threading.Thread.Sleep(250);
-			//}
-			
-
-			if (System.Threading.Thread.CurrentThread.Name == null)
-			{
-				System.Threading.Thread.CurrentThread.Name = "HazardThread";
-				//Debug.WriteLine("Hazard thread: was null");
-			}
-			else
-			{
-				//Debug.WriteLine("Hazard thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
-			}
-
 			if (hazardEvent.FrontHazard && hazardEvent.BackHazard)
             {
 				hazardStates = HazardStates.FrontAndBack;
@@ -744,14 +520,15 @@ namespace MistyMapSkill2
 				Debug.WriteLine("hazardStates = back");
 			}
 
-			//HazardEvent?.Invoke(this, EventArgs.Empty);
-
-			//Debug.WriteLine("isMovingFromHazard: " + isMovingFromHazard);
-
+		
+			// Don't handle one hazard while another is already being worked on.
 			if (!isMovingFromHazard )
 			{
+				//TODO: turn these 2 variables to 1. 
 				isMovingFromHazard = true;
 				moveCommands.isMovingFromHazard = true;
+
+				// this is actually pretty nicely broken into small pieces. Check the current hazard and call the correct function
 				if (hazardStates == HazardStates.FrontAndBack)
 				{
 					// front and back handling
@@ -773,28 +550,23 @@ namespace MistyMapSkill2
 					handleBackHazard();
 				
 				}
+
 				hazardStates = HazardStates.NA;
 				isMovingFromHazard = false;
 				moveCommands.isMovingFromHazard = false;
+
+				// IMPORTANT: drive commands will be waiting to execute until the autoresetevent does set()
+				autoResetEvent.Set();
 			}
 
-			autoResetEvent.Set();
+			
 		}
 
-		private void enableTOFHazards()
-        {
-			HazardSettings hazardSettings = new HazardSettings();
-			hazardSettings.DisableTimeOfFlights = false;
-			hazardSettings.RevertToDefault = true;
-			_misty.UpdateHazardSettings(hazardSettings, null);
-		}
 
-		private void disableTOFHazards()
-        {
-			HazardSettings hazardSettings = new HazardSettings();
-			hazardSettings.DisableTimeOfFlights = true;
-			_misty.UpdateHazardSettings(hazardSettings, null);
-		}
+		/// <summary>
+		/// If there is a hazard in front and behind, theres usually not much you can do. This function turns off tof hazards 
+		/// to allow misty to move and then tries to find its way out.
+		/// </summary>
 		private void handleFrontAndBackHazard()
         {
 			bool hazardHandledSuccessfully = false;
@@ -802,31 +574,29 @@ namespace MistyMapSkill2
 			do {
 
 				Debug.WriteLine("Handling front and back hazard");
+
 				// if there is a front and back hazard, misty will not be able to spin unless tof snesors are disabled.
 				disableTOFHazards();
 				hazardHandledSuccessfully = moveAwayFromObstable(HazardStates.FrontAndBack);
-				Debug.WriteLine("hazard spinnin");
 				
+				Debug.WriteLine("hazard spinnin");
 				openAreaFound = spinTillOpenArea(1.25, true);
-						
 
-			}while(openAreaFound == false);
+			} while(openAreaFound == false);
 
 			_misty.DriveTime(10, 0, 3000, null);
-			enableTOFHazards();
+			SetDefaultHazardSettings();
 			System.Threading.Thread.Sleep(3100);
 		}
 
+		/// <summary>
+		/// Attempts to move away from front hazard 
+		/// </summary>
 		private void handleFrontHazard()
         {
 			bool hazardHandledSuccessfully = false;
 			Debug.WriteLine("Attempting to drive backwards");
-			//_misty.DriveTime(-10, 0, 3000, null);
-			//System.Threading.Thread.Sleep(3100);
-
-	
 			hazardHandledSuccessfully = moveAwayFromObstable(HazardStates.Front);
-
 
 			// check if driving backwards caused any more hazards
 			if(hazardStates == HazardStates.Back || hazardStates == HazardStates.FrontAndBack || hazardHandledSuccessfully == false)
@@ -839,11 +609,14 @@ namespace MistyMapSkill2
 				disableTOFHazards();
 				Debug.WriteLine("hazard spinnin");
 				spinTillOpenArea(1.25, true);
-				enableTOFHazards();
+				SetDefaultHazardSettings();
             }
 
 		}
-		
+
+		/// <summary>
+		/// Attempts to move away from back hazard using moveAwayFromObstacle() then turns away from it using spinTillOpenArea()
+		/// </summary>
 		private void handleBackHazard()
         {
 			bool hazardHandledSuccessfully = false;
@@ -865,10 +638,14 @@ namespace MistyMapSkill2
 				disableTOFHazards();
 				Debug.WriteLine("hazard spinnin");
 				spinTillOpenArea(1.25, true);
-				enableTOFHazards();
+				SetDefaultHazardSettings();
 			}
 		}
 
+		/// <summary>
+		/// Attempts to move away from front hazard 
+		/// TODO: split into smaller functions
+		/// </summary>
 		private bool moveAwayFromObstable(HazardStates hazardState)
         {
 			Stopwatch stopwatch = new Stopwatch();
@@ -959,127 +736,7 @@ namespace MistyMapSkill2
 			return true;
         }
 	
-		/// <summary>
-		/// A somewhat complicated-to-write callback function that attempts to move misty away from any hazards
-		/// </summary>
-		private void ProcessHazardEventDeprecated(object sender, IHazardNotificationEvent hazardEvent)
-		{
-			
-			//_misty.get hazardEvent.Created;
-			//if (!isMovingFromHazard)
-			//{
-			// set isMovingFromHazard to true so that certain outside functions will not interfere with the hazard processing
-			isMovingFromHazard = true;
-
-			// turns out that "CurrentSensorHazard" does NOT mean the sensor that is currently in hazard, but a sensor that has a electrical current related problem :eyeroll:
-			Collection<SensorHazardStatus> hazardList = new Collection<SensorHazardStatus>(hazardEvent.CurrentSensorsHazard);
-
-			// list of sensors that have caused misty to stop moving
-			IList<SensorHazardStatus> driveStoppedList = hazardEvent.DriveStopped;
-
-			// this is mostly for debugging, just to know what is triggering the hazard event
-			getHazardType(hazardEvent);
-
-			/*
-			Debug.WriteLine("HazardList: ");
-			for (int i = 0; i < hazardList.Count(); i++) {
-				Debug.WriteLine(hazardList[i].SensorName + ": " + hazardList[i].InHazard);
-
-			}
-			Debug.WriteLine("DriveStoppedList: ");
-			for (int i = 0; i < driveStoppedList.Count(); i++)
-			{
-				Debug.WriteLine(driveStoppedList[i].SensorName + ": " + hazardList[i].InHazard);
-
-			}
-			*/
-
-			// can't drive forward or back, spin in place
-			if (hazardEvent.FrontHazard && hazardEvent.BackHazard && isMovingFromFrontAndBackHazard == false)
-			{
-				// if there is a front and back hazard, misty will not be able to spin unless tof snesors are disabled.
-				HazardSettings hazardSettings = new HazardSettings();
-				hazardSettings.DisableTimeOfFlights = true;
-				_misty.UpdateHazardSettings(hazardSettings, null);
-
-				isMovingFromFrontAndBackHazard = true;
-				Debug.WriteLine("Hazard processing: front and back");
-				//_misty.DriveArc(IMUData.Yaw - 35, 0, 2500, false, DriveArcResponse);
-				spinTillOpenArea(1, true);
-				//System.Threading.Thread.Sleep(2500);
-
-				//_misty.Drive(0, 0, null); // ??
-				//System.Threading.Thread.Sleep(500);
-				//await Task.Delay(500);
-				isMovingFromFrontAndBackHazard = false;
-
-				hazardSettings.DisableTimeOfFlights = false;
-				hazardSettings.RevertToDefault = true;
-				_misty.UpdateHazardSettings(hazardSettings, null);
-			}
-			// can't drive forward, so back up and turn away
-			else if (hazardEvent.FrontHazard && isMovingFromFrontHazard == false)
-			{
-				isMovingFromFrontHazard = true;
-				Debug.WriteLine("Attempting to drive backwards");
-				_misty.DriveTime(-10, 0, 4000, null);
-
-				System.Threading.Thread.Sleep(4100);
-				//_misty.Drive(0, 0, null); // ??
-				//System.Threading.Thread.Sleep(500);
-				//await Task.Delay(4000);
-				_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, null);
-				System.Threading.Thread.Sleep(2600);
-
-				//_misty.Drive(0, 0, null); // ??
-				//System.Threading.Thread.Sleep(500);
-				//await Task.Delay(2500);
-				Debug.WriteLine("2.5 seconds later: turning 25 degrees");
-
-				spinTillOpenArea(1, true);
-				//_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, OnResponse);
-				//System.Threading.Thread.Sleep(2500);
-				isMovingFromFrontHazard = false;
-			}
-			// can't drive backwards, so go forward
-			else if (hazardEvent.BackHazard && isMovingFromBackHazard == false)
-			{
-				isMovingFromBackHazard = true;
-				Debug.WriteLine("Attempting to drive forward");
-				_misty.DriveTime(10, 0, 4000, null);
-				//_misty.PlayAudio("001-EeeeeeE.wav", 1, PlayAudioResponse);
-				System.Threading.Thread.Sleep(4000);
-
-				spinTillOpenArea(1);
-
-				isMovingFromBackHazard = false;
-				//_misty.Drive(0, 0, null); // ??
-				//System.Threading.Thread.Sleep(500);
-				//await Task.Delay(4000);
-				//Debug.WriteLine("4 seconds later: turning 25 degrees");
-				//_misty.DriveArc(IMUData.Yaw - 25, 0, 2500, false, null);
-				//System.Threading.Thread.Sleep(2500);
-				//_misty.Drive(0, 0, null); // ??
-				//System.Threading.Thread.Sleep(500);
-				////await Task.Delay(2500);
-
-				//await spinTillOpenArea(1.25);
-			}
-			else
-			{
-				//await spinTillOpenArea();
-			}
-			isMovingFromHazard = false;
-			//}
-			//else
-			//{
-			//	//Debug.WriteLine("Oof, hazard got denied");
-
-			//}
-
-		}
-
-
+		
 		/// <summary>
 		/// Used for debugging, to know what type of hazard triggered the hazard event
 		/// </summary>
@@ -1219,6 +876,27 @@ namespace MistyMapSkill2
 			}
 		}
 
+
+		/// <summary>
+		/// turn misty's hazard settings back to the default
+		/// </summary>
+		private void SetDefaultHazardSettings()
+		{
+			HazardSettings hazardSettings = new HazardSettings();
+			hazardSettings.DisableTimeOfFlights = false;
+			hazardSettings.RevertToDefault = true;
+			_misty.UpdateHazardSettings(hazardSettings, null);
+		}
+
+		/// <summary>
+		/// This makes it so misty won't trigger hazards from timeofflight sensors
+		/// </summary>
+		private void disableTOFHazards()
+		{
+			HazardSettings hazardSettings = new HazardSettings();
+			hazardSettings.DisableTimeOfFlights = true;
+			_misty.UpdateHazardSettings(hazardSettings, null);
+		}
 		/// <summary>
 		/// This sets the value of closestObject to the front sensor with the closest distance reading.
 		/// </summary>
@@ -1247,41 +925,32 @@ namespace MistyMapSkill2
 		/// </summary>
 		private bool spinTillOpenArea(double distance, bool wasCalledFromHazard = false)
 		{
-
-			//if(isSpinning == IsSpinning.Spinning) 
-			//{
-			//	Debug.WriteLine("spintillopenarea called but was already spinnin");
-			//	return false; 
-			//}
+			// TODO: remove all threading related debugging. Might be useful for a bit longer though
 			System.Threading.Thread CurrentThread = System.Threading.Thread.CurrentThread;
-
 			Debug.WriteLine("Starting Spinntillopenarea(), hazard state = " + wasCalledFromHazard + ", currentThread = " + CurrentThread.Name);
+
 			int msElapsed;
 			int degreesTurned;
+
+			// flag to let other threads n stuff know that spinning has begun
+			// TODO: whats a better way to have flags besides booleans??
 			isSpinning = IsSpinning.Spinning;
 
-
-			//_misty.Stop(null);
-
-			//do
-			//{
+			// TODO: turn these 2 variables into 1
 			degreesTurned = 0;
 			msElapsed = 0;
-			//TimeOfFlightPosition initialClosestSensor = TimeOfFlightPosition.Unknown;
-			while (!IMUEventReceived)
-			{
-				Debug.WriteLine(IMUEventReceived);
-				System.Threading.Thread.Sleep(1000);
-			}
 
-
+			// get current closest front object
 			closestTOFSensorReading();
-			//IRobotCommandResponse driveArcResponse;
+			
 			int i = 0;
+
+			// keep looping till closest object is further than the set distance
 			while (i < 5 && closestObject < distance)
 			{
 				msElapsed = 0;
 
+				//TODO: turn this to an autoresetevent(), this possibly can just be deleted since now movement comnmands handle hazards directly with autoresetevents
 				while (wasCalledFromHazard == false && isMovingFromHazard == true ) { }
 
 				// basically this code is checking the initial direction to turn then its gonna keep turning in that direction till it finds open area
@@ -1293,12 +962,10 @@ namespace MistyMapSkill2
 					if (initialClosestSensor == TimeOfFlightPosition.FrontLeft)
 					{	
 						moveCommands.DriveArc(IMUData.Yaw - 90, 0, 7500, false, null, wasCalledFromHazard);
-						//_misty.DriveArc(IMUData.Yaw - 90, 0, 7500, false, null);
 					}
 					else if (initialClosestSensor == TimeOfFlightPosition.FrontRight)
 					{
 						moveCommands.DriveArc(IMUData.Yaw + 90, 0, 7500, false, null, wasCalledFromHazard);
-						//_misty.DriveArc(IMUData.Yaw + 90, 0, 7500, false, null);
 					}
 				}
 				else if (initialClosestSensor == TimeOfFlightPosition.FrontLeft)
@@ -1310,7 +977,7 @@ namespace MistyMapSkill2
 					moveCommands.DriveArc(IMUData.Yaw + 90, 0, 7500, false, null, wasCalledFromHazard);
 				}
 
-
+				// output the current sensor readings and other important information
 				Debug.WriteLine("Closest Object: " + closestObject);
 				Debug.WriteLine("frontlefttof: " + frontLeftTOF);
 				Debug.WriteLine("frontRighttof: " + frontRightTOF);
@@ -1323,8 +990,8 @@ namespace MistyMapSkill2
 				{
 
 					closestTOFSensorReading();
-					//Debug.WriteLine("Drive arc response: " + driveArcResponse.Status);
-
+				
+					// yea this is a mess idek what to do with it TODO
 					degreesTurned = degreesTurned + 5;
 					msElapsed = msElapsed + 100;
 					System.Threading.Thread.Sleep(100);
@@ -1335,12 +1002,11 @@ namespace MistyMapSkill2
 
 			}
 
-			
-				moveCommands.Drive(0, 0, null, wasCalledFromHazard);
+			// stop spinning after object is found or loop times out
+			moveCommands.Drive(0, 0, null, wasCalledFromHazard);
             
-			//while (wasCalledFromHazard == false && isMovingFromHazard == true) { }
-			//_misty.Drive(0, 0, null);
-
+			// if no open area found, move away from obstacle 
+			// TODO: implement moveawayfromobstacle here
 			if (closestObject < distance) //msElapsed >= 29000 ||  // degreesTurned >= 355
 			{
 				degreesTurned = 0;
@@ -1348,34 +1014,26 @@ namespace MistyMapSkill2
 				if (closestObject > backTOF)
 				{
 					Debug.WriteLine("Moving forward bc the last spin didnt reveal any open areas");
-					while (wasCalledFromHazard == false && isMovingFromHazard == true) { }
 					moveCommands.DriveTime(10, 0, 2500, DriveArcResponse, wasCalledFromHazard);
-					//_misty.DriveTime(10, 0, 2500, DriveArcResponse);
-					
 					System.Threading.Thread.Sleep(2500);
-					//await spinTillOpenArea(distance);
+
 				}
 				else
 				{
 					Debug.WriteLine("Moving backward bc the last spin didnt reveal any open areas");
-					while (wasCalledFromHazard == false && isMovingFromHazard == true) { }
 					moveCommands.DriveTime(-10, 0, 2500, DriveArcResponse, wasCalledFromHazard);
-					//_misty.DriveTime(-10, 0, 2500, DriveArcResponse);
-					//await Task.Delay(2500);
 					System.Threading.Thread.Sleep(2500);
 				}
 
 				return false;
 			}
-			_misty.PlayAudio("001-EeeeeeE.wav", 1, null);
-
-
-
-			//} while (msElapsed <= 29000 || closestObject < distance);
-
+			
 			Debug.WriteLine("Open area to drive was found!");
+
+			// reset flags
 			isSpinning = IsSpinning.NotSpinning;
 			initialClosestSensor = TimeOfFlightPosition.Unknown;
+
 			return true;
 
 		}
@@ -1389,25 +1047,56 @@ namespace MistyMapSkill2
         {
 			switch (tofPosition) 
 			{
+				// TODO: is this a bad way to do a switch statement? with the return statements 
 				case TimeOfFlightPosition.FrontCenter:
 				case TimeOfFlightPosition.FrontLeft:
-					
 					return TimeOfFlightPosition.FrontLeft;
-					break;
 				case TimeOfFlightPosition.FrontRight:
-					
 					return TimeOfFlightPosition.FrontRight;
-					break;
 
 			};
 			return TimeOfFlightPosition.Unknown;
         }
 
 		/// <summary>
-		/// Register only certain TOF sensors so that we dont waste too much resources
+		/// Register only certain TOF sensors so that we dont waste too much resources. Register all other event listeners here as well
 		/// </summary>
-		private void registerTOFEvents()
+		private void registerMistyEvents()
 		{
+
+			// Listen to the IMU event which gives positional data about misty
+			_misty.RegisterIMUEvent(IMUCallback, 0, true, null, null, null);
+
+			// Listen to the drive encoder event which we use for its velocity information (check if misty is moving or not)
+			// Add a function (+=) that gets called whenever the event is received
+			_misty.RegisterDriveEncoderEvent(100, true, null, "Drive Encoder Event", OnResponse);
+			_misty.DriveEncoderEventReceived += ProcessDriveEncoderEvent;
+
+			// Listen to the self state event which we use to get misty's pose, or position in the world
+			// once again, add a function (+=) that gets called whenever the event is received/triggered
+			_misty.RegisterSelfStateEvent(250, true, "SelfState", OnResponse);
+			_misty.SelfStateEventReceived += ProcessSelfStateEvent;
+
+			// Listen for hazard events. By default most hazards just cause misty to stop moving. We would like misty to navigate away from hazards
+			// once again, add a function (+=) that gets called whenever the event is received/triggered
+			_misty.RegisterHazardNotificationEvent(300, true, "Hazard Event", OnHazardEvent);
+			_misty.HazardNotificationEventReceived += ProcessHazardEvent;
+
+
+			// Listen to the slam status event, set booleans such as "isExploring", "hasPose", "isStreaming" to true or false
+			_misty.RegisterSlamStatusEvent(20, true, "Slam Status", null, null);
+			_misty.SlamStatusEventReceived += ProcessSlamStatusEvent;
+
+			//_misty.RegisterLocomotionCommandEvent(100, true, null, "Movement Command Event", null);
+			//_misty.LocomotionCommandEventReceived += ProcessLocomotionCommandEvent;
+
+			//_misty.RegisterHaltCommandEvent(100, true, "Halt Command Event", null);
+			//         _misty.HaltCommandEventReceived += ProcessHaltCommandEventReceived;
+
+			_misty.RegisterRobotCommandEvent(100, true, "Robot Command Event", null);
+			_misty.RobotCommandEventReceived += ProcessRobotCommandEvent;
+
+
 			//Register Bump Sensors with a callback
 			//_misty.RegisterBumpSensorEvent(BumpCallback, 50, true, null, null, null);
 
@@ -1438,6 +1127,7 @@ namespace MistyMapSkill2
 
 		/// <summary>
 		/// Very new function meant to spin till misty finds a pose
+		/// TODO: Probably delet this
 		/// </summary>
 		private async Task findPose()
         {
@@ -1469,6 +1159,8 @@ namespace MistyMapSkill2
 
 		/// <summary>
 		/// Keep restarting mapping till this finds a pose
+		/// TODO: this used to work actually pretty well. Idk what happened with the camera but now I have no real way of testing this 
+		/// because I cant even get it to work manually
 		/// </summary>
 		private void initializeMapping()
 		{
@@ -1517,6 +1209,8 @@ namespace MistyMapSkill2
 
 
 		/// <summary>
+		/// TODO: DEPRECATED: It just isnt consistent enough to work on misty. Possibly could work on a diff robot but the mapping and tracking is very fragile
+		///		You could probably rename dumbroaming to just roaming.
 		/// Not at all done, but will try to use the map created in dumb roam to explore out in a direction, then use tracking to return to the original position.
 		/// Potentially relies too much on misty making a good map nad not running into hazards
 		/// </summary>
@@ -1555,6 +1249,7 @@ namespace MistyMapSkill2
 		}
 
 		/// <summary>
+		/// TODO: DEPRECATED: Delete this along with semismart roam
 		/// Drive in a direction till you find an object, then return to the original center position
 		/// </summary>
 		private async Task<bool> driveThereAndBack(int x, int y, string coordinates)
@@ -1604,7 +1299,9 @@ namespace MistyMapSkill2
 		}
 
 		/// <summary>
-		/// Increment elapsed seconds and secondsSinceCommandCalled each time the timer ticks
+		/// Increment elapsed seconds and secondsSinceCommandCalled each time the timer ticks. Its kinda weird, but 
+		/// it incrememnts a different amount depending on if misty is spinning or driving straight. This is because spinning
+		/// takes longer and we really want to ensure that the robot goes a certain distance, not necessarily a certain time
 		/// </summary>
 		private static void OnTimedEvent(object source, ElapsedEventArgs e)
 		{
@@ -1622,8 +1319,8 @@ namespace MistyMapSkill2
 		}
 
 		/// <summary>
-		/// Basically, roams around semi randomly and tries to stay .5 meters away from all objects in its path.
-		/// I set it to .75 because the area I am in is too small to stay a full meter away from all objects
+		/// One of the core functions. This basically roams in a direction for a certain amount of time while avoiding objects, then attempts to return to its original position.
+		/// This takes advantage of many other functions such as spinTillOpenArea(), the MoveCommands class, MovementHistory class, and retraceSteps()
 		/// </summary>
 		private void dumbRoaming()
 		{
@@ -1631,59 +1328,56 @@ namespace MistyMapSkill2
 			elapsedSeconds = 0;
 			var random = new Random();
 			
-			//double angularVelocity = 20 * random.NextDouble();
+		
 			Debug.WriteLine("Dumb Roaming started, elapsed seconds: " + elapsedSeconds + ", isMovingFromHazard = " + isMovingFromHazard);
-			
-			
-			
-			while (elapsedSeconds < 45) // !isMapMostlyFilled(map) && 
+
+			while (elapsedSeconds < 45) 
 			{
 				
 				closestTOFSensorReading();
+				
+				// if object is far away, drive straight
 				if (!isMovingFromHazard && closestObject > .75 && robotState != RobotState.DriveStraight)
 				{
-					// currently just doesnt use the randomness, probably gonna delete it bc it doesnt help
+					
 					double angularVelocity = random.Next(-10, 10);
 					Debug.WriteLine("drivestraight (dumb roam)");
 					moveCommands.Drive(10, 0, DriveResponse);
-					//_misty.Drive(10, 0, DriveResponse);
-					//roamStates = DumbRoamStates.DriveStraight;
+				
 					robotState = RobotState.DriveStraight;
 				
 					secondsSinceCommandCalled = 0;
 
 				
 				}
+				// if object is close, spinTillOpenArea()
 				else if (!isMovingFromHazard && closestObject < .75)
 				{
 					Debug.WriteLine("find open direction (dumb roam)");
 
 					moveCommands.Drive(0, 0, null);
-					//_misty.Drive(0, 0, null);
 					System.Threading.Thread.Sleep(500);
-					//_misty.Stop(null);
+					
 					spinTillOpenArea(1.25);
-					//roamStates = DumbRoamStates.Drive360;
+
+					// okay wait why is this a thing? What is it used for? Why would I do this instead of using IsSpinning
+					// this is why refactoring is good lmao
+					// TODO: get rid of this
 					robotState = RobotState.Spinning;
 					
 					secondsSinceCommandCalled = 0;
 
-
-					Debug.WriteLine("Post-spinning, pre-drive command");
 					moveCommands.Drive(10, 0, DriveResponse);
-					//_misty.Drive(10, 0, null);
 					System.Threading.Thread.Sleep(500);
-					Debug.WriteLine("Post-drive command, pre-stop command/");
+
 				}
 				else if (isMovingFromHazard)
 				{
-					//Debug.WriteLine("IsMovingFromHazard (dumb roam)");
-					//roamStates = DumbRoamStates.NA;
-					
 					secondsSinceCommandCalled = 0;
 				}
 				
 				// possibly just make this an else statement? Idrk, probably could just merge with the above state
+				// TODO: fix this trash
 				else if(driveEncoderData.LeftVelocity == 0 && driveEncoderData.RightVelocity == 0
 						&& !isMovingFromHazard && robotState != RobotState.Hazard && secondsSinceCommandCalled > 5)
                 {
@@ -1700,15 +1394,12 @@ namespace MistyMapSkill2
 					//roamStates = DumbRoamStates.NA;
 					
                 }
-                else
-                {
-					
-                }
+			
 				
 			}
 			moveCommands.Drive(0, 0, null);
-			//_misty.Drive(0, 0, null);
 			System.Threading.Thread.Sleep(2000);
+
 			Debug.WriteLine("ROAMING IS DONE WE ARE NOW RETRACING STEPS!!!!!! = " + stepsToRetrace);
 			movementHistory.RetraceSteps(_misty, stepsToRetrace );
 			
@@ -1720,12 +1411,11 @@ namespace MistyMapSkill2
 
 		/// <summary>
 		/// This turns the map into an image that is stored in the same location as the skill.
-		/// You can use scp -r administrator@<ip_of_misty>:Address that was output by "Debug.WriteLine("File path: " + outputFile.Path);" to copy all of the maps created by this program
+		/// You can use scp -r administrator@<ip_of_misty>:Address that was output by "Debug.WriteLine("File path: " + outputFile.Path);" to copy all of the maps created by this program.
+		/// I was soo proud of this. Turns out it was unnecessary. Still gonna use it because I worked hard on this lol
 		/// </summary>
 		private async void setBitmap(byte[] imageByteData)
 		{
-			
-
 			string fileName = ("map-" + DateTime.UtcNow + ".png");
 			fileName = fileName.Replace(" ", "-");
 			fileName = fileName.Replace("/", "-");
@@ -1900,33 +1590,64 @@ namespace MistyMapSkill2
 			//TODO Put your code here and update the summary above
 		}
 
+		/// <summary>
+		/// Sets slamStatus to the current slam status
+		/// </summary>
+		/// <param name="_slamStatus"></param>
 		public void SlamStatusResponse(IGetSlamStatusResponse _slamStatus)
 		{
 			slamStatus = _slamStatus;
         }
 
+		/// <summary>
+		/// sets "map" to the GetMapResponse response
+		/// </summary>
+		/// <param name="commandResponse"></param>
 		private void GetMapResponse(IGetMapResponse commandResponse)
 		{
 			map = commandResponse.Data;
 		}
 
+		/// <summary>
+		/// Generic callback function
+		/// </summary>
+		/// <param name="response"></param>
 		public void OnResponse(IRobotCommandResponse response)
 		{
 			Debug.WriteLine(response.ResponseType + ": " + response.Status);
 		}
+
+		/// <summary>
+		/// Callback function for led changes. Kinda pointless
+		/// </summary>
+		/// <param name="response"></param>
 		private void LEDResponse(IRobotCommandResponse response)
 		{
 			Debug.WriteLine("led response: " + response.Status);
 		}
+
+		/// <summary>
+		/// Callback function for play audio commands. Also pointless tbh
+		/// </summary>
+		/// <param name="response"></param>
 		private void PlayAudioResponse(IRobotCommandResponse response)
 		{
 			Debug.WriteLine("Play audio response: " + response.Status);
 		}
 
+		/// <summary>
+		/// Callback function for drive arc. Also basically pointless
+		/// </summary>
+		/// <param name="response"></param>
 		private void DriveArcResponse(IRobotCommandResponse response)
 		{
 			Debug.WriteLine("drive arc response: " + response.Status);
 		}
+
+		/// <summary>
+		/// Callback function for drive. Still pointless
+		/// </summary>
+		/// <param name="response"></param>
 		private void DriveResponse(IRobotCommandResponse response)
 		{
 			Debug.WriteLine("drive response: " + response.Status);
