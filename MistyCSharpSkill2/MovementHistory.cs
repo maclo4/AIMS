@@ -12,60 +12,59 @@ using MistyRobotics.SDK.Responses;
 
 namespace MistyCSharpSkill2
 {
+	/// <summary>
+	/// Class that keeps track of past movement commands and the time that each was created. 
+	/// Allows for retracing of steps.
+	/// </summary>
 	class MovementHistory
 	{
-
-		// input buffer variable to store 10 most recent inputs
+		/// <summary>
+		///  input buffer variable to store 10 most recent inputs
+		/// </summary>
 		List<IRobotCommandEvent> moveQueue;
-		Stopwatch stopwatch;
 		DateTimeOffset previousTime, currentTime;
 		bool retracingSteps = false;
 
 		public int size { get; private set; }
 
-		// constructor (kinda pointless)
+		/// <summary>
+		/// Initialize variables with a the time of the first command created
+		/// </summary>
+		/// <param name="firstEvent">The Created field of a misty command</param>
 		public MovementHistory(DateTimeOffset firstEvent)
 		{
 			moveQueue = new List<IRobotCommandEvent>();
-			stopwatch = new Stopwatch();
-			stopwatch.Start();
 			size = 10000;
 			previousTime = firstEvent;
 			currentTime = previousTime;
 		}
 
 
-		// add an input to the end of the list
+		
+		/// <summary>
+		/// Add a movement command to the queue.
+		/// </summary>
+		/// <param name="moveCommand">Movement command to be added to the queue</param>
 		public void Enqueue(IRobotCommandEvent moveCommand)
 		{
 			if (retracingSteps == true)
 			{
-				//Debug.WriteLine("Command rejected bc of retracing steps being active");
 				return;
 			}
 
-			//IDriveEncoderEvent inputTime = new IDriveEncoderEvent(input, stopwatch.ElapsedMilliseconds);
-			//previousTime = currentTime;
-			//currentTime = _created;
-			//TimeSpan difference = currentTime.Subtract(previousTime);
-
-			/*
-			Debug.WriteLine("driveEncoderData.Created: " + driveEncoderData.Created);
-			Debug.WriteLine("Previous Time: " + previousTime);
-			Debug.WriteLine("Current Time: " + currentTime);
-			Debug.WriteLine("difference: " + difference.TotalMilliseconds);
-			*/
-
-
-			//MoveCommand moveCommand = new MoveCommand(_angularVelocity, _linearVelocity, _created);
 			moveQueue.Add(moveCommand);
 
+			// remove oldest command if queue gets too big. Unlikely
 			while (moveQueue.Count > size)
 			{
-
 				moveQueue.RemoveAt(0);
 			}
 		}
+
+		/// <summary>
+		/// Pop the top event off the queue
+		/// </summary>
+		/// <returns></returns>
 		public IRobotCommandEvent Pop()
 		{
 			var movement = moveQueue.ElementAt(moveQueue.Count - 1);
@@ -73,6 +72,11 @@ namespace MistyCSharpSkill2
 			return movement;
 		} 
 
+		/// <summary>
+		/// Redo the commands in the queue in reverse to retrace steps
+		/// </summary>
+		/// <param name="_misty">The IRobotMessenger representing the current Misty in use</param>
+		/// <param name="stepsToRetrace">Number of commands in the queue to retrace</param>
 		public void RetraceSteps(IRobotMessenger _misty, int stepsToRetrace = -1)
         {
 			HazardSettings hazardSettings = new HazardSettings();
@@ -98,9 +102,7 @@ namespace MistyCSharpSkill2
 				currentTime = moveCommand.Created;
 
 				if (moveCommand.Command == "Drive" || moveCommand.Command == "DriveAsync") {
-					
-					
-					
+		
 					var linearVelocityString = moveCommand.Parameters["LinearVelocity"];
 					var angularVelocityString = moveCommand.Parameters["AngularVelocity"];
 					double linearVelocity = Convert.ToDouble(linearVelocityString);
@@ -140,8 +142,6 @@ namespace MistyCSharpSkill2
 
             }
 
-			
-
 			hazardSettings.DisableTimeOfFlights = false;
 			hazardSettings.RevertToDefault = true;
 			_misty.UpdateHazardSettings(hazardSettings, null);
@@ -154,42 +154,7 @@ namespace MistyCSharpSkill2
 			Debug.WriteLine("Drive track resonse: " + commandResponse.Status);
         }
 
-        /*
-		// returns a specified amount of the most recent inputs from the list
-		public List<InputTime> getTopInputs(int numInputs = 3)
-		{
-			List<InputTime> topInputs = new List<InputTime>(numInputs);
-			int i = inputBuffer.Count - 1;
-
-			while (i >= inputBuffer.Count - numInputs && i >= 0)
-			{
-				topInputs.Add(inputBuffer[i]);
-				i--;
-			}
-
-			return topInputs;
-		}
-		*/
-
-        // mainly for testing
-        /*
-		public void printBuffer()
-		{
-			List<InputTime> printTop = getTopInputs(20);
-			int i = 0;
-			foreach (InputTime inputs in printTop)
-			{
-				UnityEngine.Debug.Log(i + ": " + inputs.input + ", " + inputs.elapsedMilliseconds);
-				i++;
-			}
-		}
-		*/
-
-        public long getCurrentTime()
-		{
-			return stopwatch.ElapsedMilliseconds;
-		}
-
+   
 	}
 }
 
