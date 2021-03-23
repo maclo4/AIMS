@@ -52,11 +52,14 @@ namespace MistyCSharpSkill2
 				return;
 			}
 
+			Debug.WriteLine("Enqueuing: " + moveCommand.Command);
+			Debug.WriteLine("moveQueue.Count: " + moveQueue.Count);
 			moveQueue.Add(moveCommand);
 
 			// remove oldest command if queue gets too big. Unlikely
 			while (moveQueue.Count > size)
 			{
+				Debug.WriteLine("queue size too big");
 				moveQueue.RemoveAt(0);
 			}
 		}
@@ -93,7 +96,8 @@ namespace MistyCSharpSkill2
             }
 			//int size = inputBuffer.Count;
 			Debug.WriteLine("size: " + size);
-			for (int i = 0; i < stepsToRetrace; i++)
+			Debug.WriteLine("stepstoretrace: " + stepsToRetrace);
+			for (int i = 0; i < stepsToRetrace; i++) // TODO: maybe change the <= to <
             {
 
                 IRobotCommandEvent moveCommand = Pop();
@@ -140,7 +144,9 @@ namespace MistyCSharpSkill2
 					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500);
 				}
 
-            }
+				Debug.WriteLine("int i = " + i + ", stepstoretrascce = " + stepsToRetrace);
+
+			}
 
 			hazardSettings.DisableTimeOfFlights = false;
 			hazardSettings.RevertToDefault = true;
@@ -151,7 +157,7 @@ namespace MistyCSharpSkill2
 
         private void DriveTrackResponse(IRobotCommandResponse commandResponse)
         {
-			Debug.WriteLine("Drive track resonse: " + commandResponse.Status);
+			//Debug.WriteLine("Drive track resonse: " + commandResponse.Status);
         }
 
    

@@ -77,13 +77,14 @@ namespace MistyMapSkill2
 
 		private bool firstMove = true;
 
+		private readonly object balanceLock = new object();
 		/// <summary>
 		/// This is used as a signal to prevent misty from receiving movement commands when she is already moving from a hazard.
 		/// Set to true at the start of a hazard processing and false at the end of a hazard processing.
 		/// </summary>
-		
+
 		// TODO: make this thread safe
-		public  static bool isMovingFromHazard{ get; set;}
+		public static bool isMovingFromHazard{ get; set;}
 
 		/// <summary>
 		/// This is used as a signal to prevent misty from receiving movement commands when she is already moving from a hazard.
@@ -267,7 +268,7 @@ namespace MistyMapSkill2
 			dumbRoamTimer.AutoReset = true;
 			dumbRoamTimer.Start();
 
-			//TODO: comment move commands class
+		
 			moveCommands = new MoveCommands(_misty, autoResetEvent);
 
 			// Check description (All functions should have descriptions if you hover over them)
@@ -392,37 +393,42 @@ namespace MistyMapSkill2
 		}
 
 		/// <summary>
-		/// Any time that misty receives any command it will go to here. We are only really interested in the movement commands. TODO: Filter out all non-movement commands
+		/// Any time that misty receives any command it will go to here. We are only really interested in the movement commands. 
 		/// </summary>
 		/// <param name="sender"></param>
 		/// <param name="commandEvent"></param>
         private void ProcessRobotCommandEvent(object sender, IRobotCommandEvent commandEvent)
         {
+
 			// ensure that its a drive command
 			if( commandEvent.Command == "Drive" || commandEvent.Command == "DriveTime" || 
 				commandEvent.Command == "DriveAsync" || commandEvent.Command == "DriveTimeAsync" ||
 				commandEvent.Command == "DriveHeading" || commandEvent.Command == "DriveHeadingAsync" ||
 				commandEvent.Command == "DriveTrack" || commandEvent.Command == "DriveTrackAsync" || commandEvent.Command == "Stop")
             {
-				//increment steps to retrace bc youre also about to add this movement to the MovementHistory queue
-				stepsToRetrace++;
-				Debug.WriteLine("Robot Command Event: " + commandEvent.Command);
-
-				// the first command is used to initialize the movement history. TODO: theres probly a better way to initialize this than having a boolean keep track of it
-				if (firstMove == true)
+				lock (balanceLock)
 				{
-					movementHistory = new MovementHistory(commandEvent.Created);
-					firstMove = false;
-				}
+					//increment steps to retrace bc youre also about to add this movement to the MovementHistory queue
+					stepsToRetrace++;
+					Debug.WriteLine("Robot Command Event: " + commandEvent.Command);
 
-				movementHistory.Enqueue(commandEvent);
+					// the first command is used to initialize the movement history. TEST: DONE BUT still test a bit more
+					if (movementHistory == null) //firstMove == true
+					{
+						Debug.WriteLine("Movement history initialized");
+						movementHistory = new MovementHistory(commandEvent.Created);
+						//firstMove = false;
+					}
+
+					movementHistory.Enqueue(commandEvent);
+				}
 			}
 			// this else if is the same as above except it handles drive arc commands
 			else if(commandEvent.Command == "DriveArc" || commandEvent.Command == "DriveArcAsync")
             {
 				Debug.WriteLine("Robot Command Event: " + commandEvent.Command);
 				stepsToRetrace++;
-				if (firstMove == true)
+				if (movementHistory == null)
 				{
 					movementHistory = new MovementHistory(commandEvent.Created);
 					firstMove = false;
@@ -929,16 +935,14 @@ namespace MistyMapSkill2
 			System.Threading.Thread CurrentThread = System.Threading.Thread.CurrentThread;
 			Debug.WriteLine("Starting Spinntillopenarea(), hazard state = " + wasCalledFromHazard + ", currentThread = " + CurrentThread.Name);
 
-			Stopwatch stopwatch = Stopwatch();
+			Stopwatch stopwatch = Stopwatch.StartNew();
 			int msElapsed;
-			
+
 
 			// flag to let other threads n stuff know that spinning has begun
-			// TODO: whats a better way to have flags besides booleans??
+			// TODO: whats a better way to have flags besides booleans?? It seems like microsoft is suggesting basically this. Look at IsBusy
+			// https://docs.microsoft.com/en-us/dotnet/standard/asynchronous-programming-patterns/best-practices-for-implementing-the-event-based-asynchronous-pattern
 			isSpinning = IsSpinning.Spinning;
-
-			// TODO: this is bad, use a timer or anything else. Okay I did it but still TODO is testing to make sure I didnt screw anything up (doubtful)
-			//msElapsed = 0;
 
 			// get current closest front object
 			closestTOFSensorReading();
@@ -993,7 +997,7 @@ namespace MistyMapSkill2
 				
 					//msElapsed = msElapsed + 100;
 					System.Threading.Thread.Sleep(100);
-				} while (closestObject < distance && stopwatch.ElapsedMilliseconds == 7500); //&& degreesTurned < 355  && driveArcResponse.Status == ResponseStatus.Success
+				} while (closestObject < distance && stopwatch.ElapsedMilliseconds <= 7500); //&& degreesTurned < 355  && driveArcResponse.Status == ResponseStatus.Success
 				i++;
 
 			}
@@ -1045,10 +1049,12 @@ namespace MistyMapSkill2
         {
 			switch (tofPosition) 
 			{
-				// TODO: is this a bad way to do a switch statement? with the return statements 
 				case TimeOfFlightPosition.FrontCenter:
+					return TimeOfFlightPosition.FrontLeft;
+
 				case TimeOfFlightPosition.FrontLeft:
 					return TimeOfFlightPosition.FrontLeft;
+
 				case TimeOfFlightPosition.FrontRight:
 					return TimeOfFlightPosition.FrontRight;
 
@@ -1090,7 +1096,7 @@ namespace MistyMapSkill2
 
 			//_misty.RegisterHaltCommandEvent(100, true, "Halt Command Event", null);
 			//         _misty.HaltCommandEventReceived += ProcessHaltCommandEventReceived;
-
+		
 			_misty.RegisterRobotCommandEvent(100, true, "Robot Command Event", null);
 			_misty.RobotCommandEventReceived += ProcessRobotCommandEvent;
 
@@ -1207,96 +1213,6 @@ namespace MistyMapSkill2
 
 
 		/// <summary>
-		/// TODO: DEPRECATED: It just isnt consistent enough to work on misty. Possibly could work on a diff robot but the mapping and tracking is very fragile
-		///		You could probably rename dumbroaming to just roaming.
-		/// Not at all done, but will try to use the map created in dumb roam to explore out in a direction, then use tracking to return to the original position.
-		/// Potentially relies too much on misty making a good map nad not running into hazards
-		/// </summary>
-		private async Task semiSmartRoam()
-		{
-			Debug.WriteLine("SemiSmart Roam");
-			double x = initialPose.X;
-			double y = initialPose.Y;
-			Debug.WriteLine("Target pose: " + x + ":" + y);
-			Debug.WriteLine("Pre path pose: " + pose.X + ":" + pose.Y);
-			bool pathCompleted = false;
-			double turnDegrees = 20;
-			double degreesTurned = 0;
-			//string coordinates = (x.ToString() + ":" + y.ToString());
-			string coordinates = "";
-
-			while(degreesTurned <= 360)
-			{
-				await _misty.DriveArcAsync(IMUData.Yaw - turnDegrees, 0, 2500, false);
-				degreesTurned += turnDegrees;
-				await Task.Delay(2500);
-				await driveThereAndBack((int)x, (int)y, coordinates);
-			}
-			//Debug.WriteLine("Semi Smart Roam started");
-			//Debug.WriteLine("OriginX: " + map.OriginX);
-			//Debug.WriteLine("OriginY: " + map.OriginY);
-			//Debug.WriteLine("Pose: " + pose.X + ":" + pose.Y);
-
-			//IRobotCommandResponse pathResponse = await _misty.FollowPathAsync("0:0", 10, null, 0, null);
-			//await Task.Delay(10000);
-			//Debug.WriteLine("Path error msg: " + pathResponse.ErrorMessage);
-			//Debug.WriteLine("Path following status: " + pathResponse.Status);
-			//await drive360();
-			//Debug.WriteLine("Pose after following the path: " + pose.X + ":" + pose.Y);
-
-		}
-
-		/// <summary>
-		/// TODO: DEPRECATED: Delete this along with semismart roam
-		/// Drive in a direction till you find an object, then return to the original center position
-		/// </summary>
-		private async Task<bool> driveThereAndBack(int x, int y, string coordinates)
-        {
-			await _misty.DriveAsync(15, 0);
-			do
-			{
-				 closestTOFSensorReading();
-
-			} while (closestObject > .75);
-			Debug.WriteLine("Pre path pose: " + pose.X + ":" + pose.Y);
-
-			await _misty.StopAsync();
-			await Task.Delay(2500);
-
-			IGetSlamPathResponse pathResponse = await _misty.GetSlamPathAsync(x, y, .25, .1, true);
-			Debug.WriteLine("pathresponse.data.count: " + pathResponse.Data.Count);
-			Debug.WriteLine("pathresponse.status: " + pathResponse.Status);
-
-			for (int i = 0; i < pathResponse.Data.Count; i++)
-			{
-				coordinates = coordinates + pathResponse.Data.ElementAt(i).X + ":" + pathResponse.Data.ElementAt(i).Y + ",";
-
-			}
-			coordinates = coordinates.TrimEnd(',');
-			Debug.WriteLine("coordinates: " + coordinates);
-			IRobotCommandResponse followPatchResponse = await _misty.FollowPathAsync(coordinates, null, null, 0, null);
-
-			Debug.WriteLine("Follow path response status: " + followPatchResponse.Status);
-			while((pose.X > initialPose.X - 1 && pose.X < initialPose.X + 1) && (pose.Y > initialPose.Y - 1 && pose.Y < initialPose.Y + 1)) 
-			{
-				await Task.Delay(100);
-			}
-			Debug.WriteLine("Post path pose: " + pose.X + ":" + pose.Y);
-
-			if (followPatchResponse.Status == ResponseStatus.Fail || followPatchResponse.Status == ResponseStatus.Ignored 
-				|| followPatchResponse.Status == ResponseStatus.Timeout)
-            {
-				return false;
-            }
-            else
-            {
-				return true;
-
-			}
-			
-		}
-
-		/// <summary>
 		/// Increment elapsed seconds and secondsSinceCommandCalled each time the timer ticks. Its kinda weird, but 
 		/// it incrememnts a different amount depending on if misty is spinning or driving straight. This is because spinning
 		/// takes longer and we really want to ensure that the robot goes a certain distance, not necessarily a certain time
@@ -1377,8 +1293,8 @@ namespace MistyMapSkill2
 				// possibly just make this an else statement? Idrk, probably could just merge with the above state
 				// TODO: fix this trash
 				else if(driveEncoderData.LeftVelocity == 0 && driveEncoderData.RightVelocity == 0
-						&& !isMovingFromHazard && robotState != RobotState.Hazard && secondsSinceCommandCalled > 5)
-                {
+						&& isMovingFromHazard == false && secondsSinceCommandCalled > 5) //robotState != RobotState.Hazard
+				{
 					// I think this is where the problem is, but it has happened in other areas as well. 
 					robotState = RobotState.NA;
 					secondsSinceCommandCalled = 0;
@@ -1612,7 +1528,7 @@ namespace MistyMapSkill2
 		/// <param name="response"></param>
 		public void OnResponse(IRobotCommandResponse response)
 		{
-			Debug.WriteLine(response.ResponseType + ": " + response.Status);
+			//Debug.WriteLine(response.ResponseType + ": " + response.Status);
 		}
 
 		/// <summary>
@@ -1621,7 +1537,7 @@ namespace MistyMapSkill2
 		/// <param name="response"></param>
 		private void LEDResponse(IRobotCommandResponse response)
 		{
-			Debug.WriteLine("led response: " + response.Status);
+			//Debug.WriteLine("led response: " + response.Status);
 		}
 
 		/// <summary>
@@ -1630,7 +1546,7 @@ namespace MistyMapSkill2
 		/// <param name="response"></param>
 		private void PlayAudioResponse(IRobotCommandResponse response)
 		{
-			Debug.WriteLine("Play audio response: " + response.Status);
+			//Debug.WriteLine("Play audio response: " + response.Status);
 		}
 
 		/// <summary>
@@ -1639,7 +1555,7 @@ namespace MistyMapSkill2
 		/// <param name="response"></param>
 		private void DriveArcResponse(IRobotCommandResponse response)
 		{
-			Debug.WriteLine("drive arc response: " + response.Status);
+			//Debug.WriteLine("drive arc response: " + response.Status);
 		}
 
 		/// <summary>
@@ -1648,7 +1564,7 @@ namespace MistyMapSkill2
 		/// <param name="response"></param>
 		private void DriveResponse(IRobotCommandResponse response)
 		{
-			Debug.WriteLine("drive response: " + response.Status);
+			//Debug.WriteLine("drive response: " + response.Status);
 		}
 
 
