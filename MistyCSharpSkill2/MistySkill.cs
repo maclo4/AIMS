@@ -663,7 +663,7 @@ namespace MistyMapSkill2
 
 				Debug.WriteLine("pre FRONT while loop backtof and closest object: " + backTOF + ", " + closestObject);
 				stopwatch = Stopwatch.StartNew();
-				while ((closestObject < .215 && backTOF > .07 ) || stopwatch.ElapsedMilliseconds > timeOutMs)
+				while ((closestObject < .215 && backTOF > .07 ) && stopwatch.ElapsedMilliseconds < timeOutMs)
 				{
 					
 					closestTOFSensorReading();
@@ -672,7 +672,7 @@ namespace MistyMapSkill2
 				stopwatch.Stop();
 				_misty.Drive(0, 0, null);
 
-				if(stopwatch.ElapsedMilliseconds > timeOutMs && closestObject >= .215)
+				if(stopwatch.ElapsedMilliseconds > timeOutMs && closestObject <= .215)
                 {
 					return false;
                 }
@@ -683,13 +683,13 @@ namespace MistyMapSkill2
 				_misty.Drive(5, 0, null);
 				Debug.WriteLine("pre BACK while loop backtof and closest object: " + backTOF + ", " + closestObject);
 				stopwatch = Stopwatch.StartNew();
-				while (closestObject > .07 && backTOF < .215 || stopwatch.ElapsedMilliseconds > timeOutMs)
+				while (closestObject > .07 && backTOF < .215 && stopwatch.ElapsedMilliseconds < timeOutMs)
 				{
 					closestTOFSensorReading();
 				}
 				_misty.Drive(0, 0, null);
 
-				if (stopwatch.ElapsedMilliseconds > timeOutMs && backTOF >= .215)
+				if (stopwatch.ElapsedMilliseconds > timeOutMs && backTOF <= .215)
 				{
 					return false;
 				}
@@ -954,8 +954,11 @@ namespace MistyMapSkill2
 			{
 				msElapsed = 0;
 
-				//TODO: turn this to an autoresetevent(), this possibly can just be deleted since now movement comnmands handle hazards directly with autoresetevents
-				while (wasCalledFromHazard == false && isMovingFromHazard == true ) { }
+				//TODO: test the autoresetevent
+				if(wasCalledFromHazard == false && isMovingFromHazard == true ) 
+				{
+					autoResetEvent.WaitOne();
+				}
 
 				// basically this code is checking the initial direction to turn then its gonna keep turning in that direction till it finds open area
 				if (i == 0 || initialClosestSensor == TimeOfFlightPosition.Unknown)
@@ -1012,19 +1015,21 @@ namespace MistyMapSkill2
 			if (closestObject < distance) //msElapsed >= 29000 ||  // degreesTurned >= 355
 			{
 				
-
+				
 				if (closestObject > backTOF)
 				{
 					Debug.WriteLine("Moving forward bc the last spin didnt reveal any open areas");
-					moveCommands.DriveTime(10, 0, 2500, DriveArcResponse, wasCalledFromHazard);
-					System.Threading.Thread.Sleep(2500);
+					moveAwayFromObstable(HazardStates.Back);
+					//moveCommands.DriveTime(10, 0, 2500, DriveArcResponse, wasCalledFromHazard);
+					//System.Threading.Thread.Sleep(2500);
 
 				}
 				else
 				{
 					Debug.WriteLine("Moving backward bc the last spin didnt reveal any open areas");
-					moveCommands.DriveTime(-10, 0, 2500, DriveArcResponse, wasCalledFromHazard);
-					System.Threading.Thread.Sleep(2500);
+					moveAwayFromObstable(HazardStates.Front);
+					//moveCommands.DriveTime(-10, 0, 2500, DriveArcResponse, wasCalledFromHazard);
+					//System.Threading.Thread.Sleep(2500);
 				}
 
 				return false;
