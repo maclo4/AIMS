@@ -55,13 +55,10 @@ namespace MistyCSharpSkill2
             
             if(isMovingFromHazard == true && wasCalledFromHazard == false)
             {
-                Debug.WriteLine("Ope gonna wait on the hazard to get handled");
                 autoEvent.WaitOne();
-
-                Debug.WriteLine("signal received!!1!");
             }
-            _misty.Drive(linearVelocity, angularVelocity, commandCallback == null ? null : commandCallback);
-            Debug.WriteLine("drive command ordered");
+            _misty.Drive(linearVelocity, angularVelocity, null); // commandCallback == null ? null : commandCallback
+
         }
 
         /// <summary>
@@ -79,7 +76,7 @@ namespace MistyCSharpSkill2
                 autoEvent.WaitOne();
             }
 
-            _misty.DriveTime(linearVelocity, angularVelocity, timeMs, commandCallback == null ? null : commandCallback);
+            _misty.DriveTime(linearVelocity, angularVelocity, timeMs, null); // commandCallback == null ? null : commandCallback
         }
         /// <summary>
         /// Executes Misty DriveArc() command but checks for hazards first. Will wait till hazard is resolved to issue command.
@@ -96,14 +93,16 @@ namespace MistyCSharpSkill2
             {
                 autoEvent.WaitOne();
             }
-            if (commandCallback != null)
-            {
-                _misty.DriveArc(heading, radius, timeMs, reverse, commandCallback);
-            }
-            else
-            {
-                _misty.DriveArc(heading, radius, timeMs, reverse, null);
-            }
+
+            
+            _misty.DriveArc(heading, radius, timeMs, reverse, null); //commandCallback == null ? null : commandCallback
+            //if (commandCallback != null)
+            //{
+            //    _misty.DriveArc(heading, radius, timeMs, reverse, commandCallback);/
+            //else
+            //{
+            //    _misty.DriveArc(heading, radius, timeMs, reverse, null);
+            //}
         }
     }
 }

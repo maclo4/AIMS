@@ -283,28 +283,34 @@ namespace MistyMapSkill2
 
 
 			// Debug.WriteLine("Retracing complete");
-			//while (true) { }
 
+			//Thread.Sleep(40000);
+
+			//movementHistory.RetraceSteps(_misty);
+
+			//while (true) { }
 			// =============================================================================================================
 			// \/ Real code begins again here \/ 
 			// =============================================================================================================
 
 			// sometimes they get changed, just make sure theyre all set back to normal
 			SetDefaultHazardSettings();
-			
+			//disableTOFHazards();
 			// just make sure the variables for the sensors all have a reading
 			initializeSensorReadings();
 
-			for (int i = 0; i < 5; i++)
-			{
-				dumbRoaming();
-				moveCommands.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
-				System.Threading.Thread.Sleep(3500);
-			}
+
+            for (int i = 0; i < 5; i++)
+            {
+                dumbRoaming();
+                moveCommands.DriveArc(IMUData.Yaw - 90, 0, 3000, false, null);
+                System.Threading.Thread.Sleep(3500);
+            }
 
 			while (true) { }
 
-			do
+
+            do
 			{
 				Debug.WriteLine("Starting mapping (again)");
 				initializeMapping();
@@ -393,24 +399,32 @@ namespace MistyMapSkill2
 		}
 
 		/// <summary>
-		/// Any time that misty receives any command it will go to here. We are only really interested in the movement commands. 
+		/// Any time that misty receives any command it will go to here. We are only really interested in the movement commands.
+		/// TODO: I realized that this will not necessarily line up with the robots real movement if the command it interrupted by a hazard. Wait actually I think it works fine? hmm whats the problem
 		/// </summary>
 		/// <param name="sender"></param>
 		/// <param name="commandEvent"></param>
         private void ProcessRobotCommandEvent(object sender, IRobotCommandEvent commandEvent)
         {
 
-			// ensure that its a drive command
-			if( commandEvent.Command == "Drive" || commandEvent.Command == "DriveTime" || 
+            lock (balanceLock)
+            {
+                // ensure that its a drive command
+                if (commandEvent.Command == "Drive" || commandEvent.Command == "DriveTime" ||
 				commandEvent.Command == "DriveAsync" || commandEvent.Command == "DriveTimeAsync" ||
 				commandEvent.Command == "DriveHeading" || commandEvent.Command == "DriveHeadingAsync" ||
 				commandEvent.Command == "DriveTrack" || commandEvent.Command == "DriveTrackAsync" || commandEvent.Command == "Stop")
-            {
-				lock (balanceLock)
 				{
+					Debug.WriteLine("command type received: " + commandEvent.Command);
+
+					//foreach (KeyValuePair<string, object> kvp in commandEvent.Parameters)
+					//{
+					//	//textBox3.Text += ("Key = {0}, Value = {1}", kvp.Key, kvp.Value);
+					//	Debug.WriteLine(kvp.Key + ": " + kvp.Value);
+					//}
 					//increment steps to retrace bc youre also about to add this movement to the MovementHistory queue
 					stepsToRetrace++;
-					Debug.WriteLine("Robot Command Event: " + commandEvent.Command);
+					//Debug.WriteLine("Robot Command Event: " + commandEvent.Command);
 
 					// the first command is used to initialize the movement history. TEST: DONE BUT still test a bit more
 					if (movementHistory == null) //firstMove == true
@@ -419,26 +433,31 @@ namespace MistyMapSkill2
 						movementHistory = new MovementHistory(commandEvent.Created);
 						//firstMove = false;
 					}
-
+					Debug.WriteLine("");
 					movementHistory.Enqueue(commandEvent);
+
 				}
-			}
-			// this else if is the same as above except it handles drive arc commands
-			else if(commandEvent.Command == "DriveArc" || commandEvent.Command == "DriveArcAsync")
-            {
-				Debug.WriteLine("Robot Command Event: " + commandEvent.Command);
-				stepsToRetrace++;
-				if (movementHistory == null)
+				// this else if is the same as above except it handles drive arc commands
+				else if (commandEvent.Command == "DriveArc" || commandEvent.Command == "DriveArcAsync")
 				{
-					movementHistory = new MovementHistory(commandEvent.Created);
-					firstMove = false;
+					//foreach (KeyValuePair<string, object> kvp in commandEvent.Parameters)
+					//{
+					//	//textBox3.Text += ("Key = {0}, Value = {1}", kvp.Key, kvp.Value);
+					//	Debug.WriteLine(kvp.Key + ": " + kvp.Value);
+					//}
+					//Debug.WriteLine("Robot Command Event: " + commandEvent.Command);
+					stepsToRetrace++;
+					if (movementHistory == null)
+					{
+						movementHistory = new MovementHistory(commandEvent.Created);
+						firstMove = false;
+					}
+					// for retracing these, the robot should trace back to the original heading
+					IRobotCommandEvent driveArcCommand = commandEvent;
+					driveArcCommand.Parameters["Heading"] = IMUData.Yaw;
+					movementHistory.Enqueue(driveArcCommand);
 				}
-				// for retracing these, the robot should trace back to the original heading
-				IRobotCommandEvent driveArcCommand = commandEvent;
-				driveArcCommand.Parameters["Heading"] = IMUData.Yaw; 
-				movementHistory.Enqueue(driveArcCommand);
 			}
-			
 
 		}
 
@@ -507,66 +526,67 @@ namespace MistyMapSkill2
 		/// <param name="hazardEvent"></param>
 		private void ProcessHazardEvent(object sender, IHazardNotificationEvent hazardEvent)
 		{
-			// think of hazardStates as a static variable. Every time a new hazard is sent it will get updated, and the thread that is 
-			// handling the hazard will accordingly react. This prevents there being like 10 different hazard processings going on at once
-			if (hazardEvent.FrontHazard && hazardEvent.BackHazard)
+            // think of hazardStates as a static variable. Every time a new hazard is sent it will get updated, and the thread that is 
+            // handling the hazard will accordingly react. This prevents there being like 10 different hazard processings going on at once
+            if (hazardEvent.FrontHazard && hazardEvent.BackHazard)
             {
-				hazardStates = HazardStates.FrontAndBack;
-				Debug.WriteLine("hazardStates = front and back");
+                hazardStates = HazardStates.FrontAndBack;
+                Debug.WriteLine("hazardStates = front and back");
 
-			}
-			else if(hazardEvent.FrontHazard)
+            }
+            else if (hazardEvent.FrontHazard)
             {
-				hazardStates = HazardStates.Front;
-				Debug.WriteLine("hazardStates = front");
-			}
-			else if(hazardEvent.BackHazard)
+                hazardStates = HazardStates.Front;
+                Debug.WriteLine("hazardStates = front");
+            }
+            else if (hazardEvent.BackHazard)
             {
-				hazardStates = HazardStates.Back;
-				Debug.WriteLine("hazardStates = back");
-			}
+                hazardStates = HazardStates.Back;
+                Debug.WriteLine("hazardStates = back");
+            }
 
-		
-			// Don't handle one hazard while another is already being worked on.
-			if (!isMovingFromHazard )
-			{
-				//TODO: turn these 2 variables to 1. 
-				isMovingFromHazard = true;
-				moveCommands.isMovingFromHazard = true;
 
-				// this is actually pretty nicely broken into small pieces. Check the current hazard and call the correct function
-				if (hazardStates == HazardStates.FrontAndBack)
-				{
-					// front and back handling
-					Debug.WriteLine("Handling front and back hazard");
-					handleFrontAndBackHazard();
-				
-				}
-				else if (hazardStates == HazardStates.Front)
-				{
-					// front handling
-					Debug.WriteLine("Handling front hazard");
-					handleFrontHazard();
-				
-				}
-				else if (hazardStates == HazardStates.Back)
-				{
-					// back handling
-					Debug.WriteLine("Handling back hazard");
-					handleBackHazard();
-				
-				}
+            // Don't handle one hazard while another is already being worked on.
+            if (!isMovingFromHazard)
+            {
+                //TODO: turn these 2 variables to 1. 
+                isMovingFromHazard = true;
+                moveCommands.isMovingFromHazard = true;
 
-				hazardStates = HazardStates.NA;
-				isMovingFromHazard = false;
-				moveCommands.isMovingFromHazard = false;
+                // this is actually pretty nicely broken into small pieces. Check the current hazard and call the correct function
+                if (hazardStates == HazardStates.FrontAndBack)
+                {
+                    // front and back handling
+                    Debug.WriteLine("Handling front and back hazard");
+                    handleFrontAndBackHazard();
 
-				// IMPORTANT: drive commands will be waiting to execute until the autoresetevent does set()
-				autoResetEvent.Set();
-			}
+                }
+                else if (hazardStates == HazardStates.Front)
+                {
+                    // front handling
+                    Debug.WriteLine("Handling front hazard");
+                    handleFrontHazard();
+                    //handleFrontAndBackHazard();
+                }
+                else if (hazardStates == HazardStates.Back)
+                {
+                    // back handling
+                    Debug.WriteLine("Handling back hazard");
+                    handleBackHazard();
+                    //handleFrontAndBackHazard();
 
-			
-		}
+                }
+
+                hazardStates = HazardStates.NA;
+                isMovingFromHazard = false;
+                moveCommands.isMovingFromHazard = false;
+
+                // IMPORTANT: drive commands will be waiting to execute until the autoresetevent does set()
+                autoResetEvent.Set();
+            }
+
+
+        }
 
 
 		/// <summary>
@@ -650,7 +670,7 @@ namespace MistyMapSkill2
 
 		/// <summary>
 		/// Attempts to move away from front hazard 
-		/// TODO: split into smaller functions. Potentially just use the logic for front and back only
+		/// TODO: split into smaller functions. 
 		/// </summary>
 		private bool moveAwayFromObstable(HazardStates hazardState)
         {
@@ -1011,7 +1031,7 @@ namespace MistyMapSkill2
 			moveCommands.Drive(0, 0, null, wasCalledFromHazard);
             
 			// if no open area found, move away from obstacle 
-			// TODO: implement moveawayfromobstacle here
+			// TODO: test with moveawayfrom object
 			if (closestObject < distance) //msElapsed >= 29000 ||  // degreesTurned >= 355
 			{
 				
@@ -1296,7 +1316,7 @@ namespace MistyMapSkill2
 				}
 				
 				// possibly just make this an else statement? Idrk, probably could just merge with the above state
-				// TODO: fix this trash
+				// TODO: fix this trash. I think its fixed
 				else if(driveEncoderData.LeftVelocity == 0 && driveEncoderData.RightVelocity == 0
 						&& isMovingFromHazard == false && secondsSinceCommandCalled > 5) //robotState != RobotState.Hazard
 				{
@@ -1304,13 +1324,13 @@ namespace MistyMapSkill2
 					robotState = RobotState.NA;
 					secondsSinceCommandCalled = 0;
 					Debug.WriteLine("Dumb Roam is not being blocked by hazards, but is neither in state 'drive360' or 'drivestraight'. Try driving backwards.");
-					moveCommands.DriveTime(-10, 0, 2500, null);
-					//_misty.DriveTime(-10, 0, 2500, null);
-					System.Threading.Thread.Sleep(2500);
-					//await Task.Delay(2500);
-					spinTillOpenArea(1.25);
 
-					//roamStates = DumbRoamStates.NA;
+					moveAwayFromObstable(HazardStates.FrontAndBack);
+					//moveCommands.DriveTime(-10, 0, 2500, null);
+					
+					System.Threading.Thread.Sleep(2500);
+	
+					spinTillOpenArea(1.25);
 					
                 }
 			

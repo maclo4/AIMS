@@ -54,6 +54,7 @@ namespace MistyCSharpSkill2
 
 			Debug.WriteLine("Enqueuing: " + moveCommand.Command);
 			Debug.WriteLine("moveQueue.Count: " + moveQueue.Count);
+			Debug.WriteLine("");
 			moveQueue.Add(moveCommand);
 
 			// remove oldest command if queue gets too big. Unlikely
@@ -141,7 +142,7 @@ namespace MistyCSharpSkill2
 					Debug.WriteLine("MoveCommand[" + i + "] DriveArc() Heading: " + heading + ", Radius: " + radius + ", TimeMs: " + timeMs + ", Reverse: " + reverse);
 					_misty.DriveArc(heading, radius, timeMs, !reverse, DriveTrackResponse);
 
-					Thread.Sleep((int)millisecondsToDriveFor.TotalMilliseconds + 500);
+					Thread.Sleep(timeMs + 500);
 				}
 
 				Debug.WriteLine("int i = " + i + ", stepstoretrascce = " + stepsToRetrace);
